@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+web/dist/
+api/*.egg-info/
+*.whl
+
+# Environment files
+.env
+.env.local
+.env.*.local
+web/.env.local
+api/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase / Android credentials
+google-services.json
+android/app/google-services.json
+**/service-account*.json
+
+# Docker
+docker-data/
+
+# Test & coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Capacitor
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
+# Misc
+*.log
