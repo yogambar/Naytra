@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --color-surface-base: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-inset: var(--surface-inset);
+  --color-surface-glass: var(--surface-glass);
+  --color-surface-border: var(--surface-border);
+  --color-surface-border-subtle: var(--surface-border-subtle);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-mist: var(--brand-mist);
+  --color-brand-marigold: var(--brand-marigold);
+  --color-brand-up: var(--color-up);
+  --color-brand-down: var(--color-down);
+  --color-brand-up-bg: var(--color-up-bg);
+  --color-brand-down-bg: var(--color-down-bg);
+  --color-brand-marigold-bg: var(--color-marigold-bg);
+  --color-brand-marigold-text: var(--color-marigold-text);
+}
+
+@layer base {
+  * {
+    border-color: var(--surface-border);
+  }
+
+  body {
+    background-color: var(--surface-base);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    color: var(--text-primary);
+  }
+
+  /* Accessible focus indicators */
+  :focus-visible {
+    outline: 2px solid var(--brand-marigold);
+    outline-offset: 2px;
+  }
+
+  /* Monospace for numbers / ticker */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Reduced motion overrides */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
