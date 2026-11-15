@@ -48,3 +48,5 @@ android/local.properties
 
 # Misc
 *.log
+.jdk21/
+

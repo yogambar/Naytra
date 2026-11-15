@@ -70,3 +70,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
 
     return app
+
+
+app = create_app()

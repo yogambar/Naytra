@@ -126,4 +126,18 @@ Before adding a new dependency:
 
 ---
 
-*Last updated: 2026-11-14*
+## Android (Capacitor Native)
+
+| Name | URL | Version | Licence | Used for | Changes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| @capacitor/core | https://capacitorjs.com | ^8.1.2 | MIT | Capacitor cross-platform runtime | — |
+| @capacitor/cli | https://capacitorjs.com | ^8.1.2 | MIT | Capacitor native CLI & tooling | — |
+| @capacitor/android | https://capacitorjs.com | ^8.1.2 | MIT | Android native runtime layer | — |
+| @capacitor/haptics | https://capacitorjs.com | ^8.0.2 | MIT | Native tactile feedback / haptic ticks | — |
+| @capacitor/status-bar | https://capacitorjs.com | ^8.0.4 | MIT | Native status bar styling & theme sync | — |
+| @capacitor/splash-screen | https://capacitorjs.com | ^8.0.2 | MIT | Native splash screen management | — |
+| @capacitor/app | https://capacitorjs.com | ^8.1.2 | MIT | Hardware back button & app lifecycle | — |
+
+---
+
+*Last updated: 2026-11-15*

@@ -4,13 +4,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { App } from '../App';
 
 describe('App Router', () => {
-  it('renders status page at root /', async () => {
+  it('renders dashboard at root /', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByText('Naytra is running')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
   });
 
   it('renders status page at /status', async () => {
@@ -28,6 +28,6 @@ describe('App Router', () => {
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByText('Naytra is running')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
   });
 });

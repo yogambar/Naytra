@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Naytra</string>
+    <string name="title_activity_main">Naytra</string>
+    <string name="package_name">com.rgc.naytra</string>
+    <string name="custom_url_scheme">com.rgc.naytra</string>
+</resources>
