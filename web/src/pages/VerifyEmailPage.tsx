@@ -25,6 +25,35 @@ export const VerifyEmailPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [cooldown]);
 
+  // Auto-reload polling: continuously check if user verified email in another tab/device
+  useEffect(() => {
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        if (auth.currentUser) {
+          await auth.currentUser.reload();
+          if (auth.currentUser.emailVerified && isMounted) {
+            clearInterval(interval);
+            hapticSuccess();
+            const updated = await refreshProfile();
+            if (updated && !updated.bonus_claimed) {
+              navigate('/signup-bonus', { replace: true });
+            } else {
+              navigate('/dashboard', { replace: true });
+            }
+          }
+        }
+      } catch {
+        // Silent catch during background polling
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [navigate, refreshProfile]);
+
   const handleResend = async () => {
     if (cooldown > 0) return;
     hapticTick();
@@ -45,15 +74,23 @@ export const VerifyEmailPage: React.FC = () => {
         await auth.currentUser.reload();
         if (auth.currentUser.emailVerified) {
           hapticSuccess();
-          await refreshProfile();
-          navigate('/dashboard');
+          const updated = await refreshProfile();
+          if (updated && !updated.bonus_claimed) {
+            navigate('/signup-bonus', { replace: true });
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
           return;
         }
       }
       const updated = await refreshProfile();
       if (updated?.email_verified) {
         hapticSuccess();
-        navigate('/dashboard');
+        if (!updated.bonus_claimed) {
+          navigate('/signup-bonus', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       }
     } finally {
       setIsChecking(false);
@@ -91,6 +128,12 @@ export const VerifyEmailPage: React.FC = () => {
           <p className="text-sm text-text-secondary mt-2 leading-relaxed">
             We sent a verification link to <strong className="text-text-primary">{displayEmail}</strong>. Please check your inbox and verify your email to unlock your virtual trading wallet.
           </p>
+
+          {/* Auto-reloading status badge */}
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-marigold/10 border border-brand-marigold/30 text-brand-marigold text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-brand-marigold animate-ping" />
+            <span>Auto-detecting email verification...</span>
+          </div>
 
           {resendSuccess && (
             <div className="mt-4 p-3 rounded-xl bg-brand-up/10 border border-brand-up/30 text-brand-up text-xs flex items-center justify-center gap-2">

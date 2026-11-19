@@ -49,7 +49,7 @@ export interface AuthContextType {
     phone?: string,
     city?: string
   ) => Promise<{ isNewUser: boolean }>;
-  signInWithGoogle: () => Promise<{ isNewUser: boolean; bonusClaimed: boolean } | null>;
+  signInWithGoogle: () => Promise<{ isNewUser: boolean; profileComplete: boolean; bonusClaimed: boolean } | null>;
   sendPasswordReset: (email: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   completeUserProfile: (data: {
@@ -306,13 +306,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = await cred.user.getIdToken();
         setIdToken(token);
 
-        // Sync or initialize in Firestore
-        const result = await syncOrInitFirestoreUser(cred.user);
-        setProfile(result.profile);
+        // Check if user has an existing profile in Firestore or local cache
+        let p = await getFirestoreUserProfile(cred.user.uid);
+        let isNewUser = false;
+
+        if (!p) {
+          const result = await syncOrInitFirestoreUser(cred.user);
+          p = result.profile;
+          isNewUser = true;
+        } else {
+          // If profile is not complete, treat as first-time onboarding
+          isNewUser = !p.profile_complete;
+        }
+
+        setProfile(p);
         hapticSuccess();
         return {
-          isNewUser: result.isNewUser,
-          bonusClaimed: Boolean(result.profile.bonus_claimed),
+          isNewUser,
+          profileComplete: Boolean(p?.profile_complete),
+          bonusClaimed: Boolean(p?.bonus_claimed),
         };
       }
       return null;
@@ -353,9 +365,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       setIsLoading(true);
       try {
-        await completeFirestoreUserProfile(auth.currentUser.uid, data);
-        const p = await getFirestoreUserProfile(auth.currentUser.uid);
-        if (p) setProfile(p);
+        const updated = await completeFirestoreUserProfile(auth.currentUser.uid, data);
+        setProfile(updated);
 
         // Best-effort backend notification
         if (idToken) {

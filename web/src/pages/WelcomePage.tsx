@@ -16,7 +16,9 @@ export const WelcomePage: React.FC = () => {
     hapticTick();
     try {
       const res = await signInWithGoogle();
-      if (res?.isNewUser || !res?.bonusClaimed) {
+      if (!res?.profileComplete) {
+        navigate('/complete-profile');
+      } else if (!res?.bonusClaimed) {
         navigate('/signup-bonus');
       } else {
         navigate('/dashboard');

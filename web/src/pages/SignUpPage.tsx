@@ -133,7 +133,9 @@ export const SignUpPage: React.FC = () => {
     setFormError(null);
     try {
       const res = await signInWithGoogle();
-      if (res?.isNewUser || !res?.bonusClaimed) {
+      if (!res?.profileComplete) {
+        navigate('/complete-profile', { replace: true });
+      } else if (!res?.bonusClaimed) {
         navigate('/signup-bonus', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
