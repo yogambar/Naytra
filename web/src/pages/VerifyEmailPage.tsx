@@ -104,12 +104,12 @@ export const VerifyEmailPage: React.FC = () => {
             <Button
               variant="primary"
               size="lg"
-              className="w-full flex items-center justify-center gap-2"
+              leftIcon={<RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />}
+              className="w-full"
               disabled={isChecking}
               onClick={handleCheckStatus}
             >
-              <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
-              <span>I Have Verified My Email</span>
+              I Have Verified My Email
             </Button>
 
             {/* Resend button */}

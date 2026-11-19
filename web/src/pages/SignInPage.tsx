@@ -143,17 +143,12 @@ export const SignInPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2"
+                loading={isLoading}
+                leftIcon={<Lock className="w-4 h-4" />}
+                rightIcon={<ArrowRight className="w-4 h-4" />}
+                className="w-full"
               >
-                {isLoading ? (
-                  <div className="w-5 h-5 rounded-full border-2 border-brand-ink border-t-transparent animate-spin" />
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    <span>Sign In</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                Sign In
               </Button>
             </div>
           </form>

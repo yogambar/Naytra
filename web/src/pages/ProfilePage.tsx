@@ -46,10 +46,10 @@ export const ProfilePage: React.FC = () => {
           variant="secondary"
           size="sm"
           onClick={handleLogout}
-          className="flex items-center gap-1.5 text-brand-down"
+          leftIcon={<LogOut className="w-3.5 h-3.5" />}
+          className="text-brand-down"
         >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sign Out</span>
+          Sign Out
         </Button>
       </div>
 

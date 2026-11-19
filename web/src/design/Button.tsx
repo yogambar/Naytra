@@ -81,14 +81,14 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={isDisabled}
         aria-busy={loading}
-        className={`inline-flex items-center justify-center gap-2 font-medium tracking-wide transition-all select-none focus-visible:outline-2 focus-visible:outline-brand-marigold focus-visible:outline-offset-2 ${sizeClasses[size]} ${variantClasses} ${className}`}
+        className={`inline-flex flex-row flex-nowrap items-center justify-center gap-2 font-medium tracking-wide transition-all select-none focus-visible:outline-2 focus-visible:outline-brand-marigold focus-visible:outline-offset-2 ${sizeClasses[size]} ${variantClasses} ${className}`}
         style={{ ...variantStyle, ...style }}
         {...props}
       >
         {loading && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-        {!loading && leftIcon && <span className="shrink-0">{leftIcon}</span>}
-        <span>{children}</span>
-        {!loading && rightIcon && <span className="shrink-0">{rightIcon}</span>}
+        {!loading && leftIcon && <span className="shrink-0 inline-flex items-center">{leftIcon}</span>}
+        <span className="inline-flex items-center justify-center gap-2 flex-nowrap leading-none">{children}</span>
+        {!loading && rightIcon && <span className="shrink-0 inline-flex items-center">{rightIcon}</span>}
       </button>
     );
   }

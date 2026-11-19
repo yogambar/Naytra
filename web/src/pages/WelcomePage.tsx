@@ -114,14 +114,14 @@ export const WelcomePage: React.FC = () => {
           <Button
             variant="primary"
             size="lg"
-            className="w-full flex items-center justify-center gap-2"
+            rightIcon={<ArrowRight className="w-4 h-4" />}
+            className="w-full"
             onClick={() => {
               hapticTick();
               navigate('/signup');
             }}
           >
-            <span>Create Free Account</span>
-            <ArrowRight className="w-4 h-4" />
+            Create Free Account
           </Button>
 
           <Button

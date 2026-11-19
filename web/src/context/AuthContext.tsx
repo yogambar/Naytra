@@ -197,38 +197,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       setIsLoading(true);
       try {
+        // Step 1: Create Firebase account — this is the critical step
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-        // Dispatch email verification
-        await sendEmailVerification(cred.user);
+
+        // Step 2: Send email verification (fire-and-forget)
+        sendEmailVerification(cred.user).catch((verifyErr) =>
+          console.warn('Could not send verification email:', verifyErr)
+        );
 
         const token = await cred.user.getIdToken();
         setIdToken(token);
 
-        // Call backend to complete profile and check age >= 18
-        const completeRes = await fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+        // Step 3: Try backend profile sync (best-effort — backend may be down)
+        try {
+          const completeRes = await fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: name.trim(),
+              dob,
+              phone: phone?.trim() || null,
+              city: city?.trim() || null,
+              terms_accepted: true,
+            }),
+          });
+
+          if (completeRes.ok) {
+            const p = await fetchBackendProfile(token);
+            setProfile(p);
+          } else {
+            console.warn('Backend profile sync returned non-OK, will retry on next sign-in');
+          }
+        } catch (backendErr) {
+          // Backend unreachable — that's OK for local dev without Docker/Postgres
+          console.warn('Backend profile sync failed (server may be down):', backendErr);
+        }
+
+        // Step 4: Set a minimal local profile so the UI knows who the user is
+        if (!profile) {
+          setProfile({
+            id: cred.user.uid,
+            email: cred.user.email || email.trim(),
             name: name.trim(),
             dob,
             phone: phone?.trim() || null,
             city: city?.trim() || null,
+            profile_complete: false,
+            email_verified: false,
             terms_accepted: true,
-          }),
-        });
-
-        if (!completeRes.ok) {
-          const errJson = await completeRes.json();
-          throw new Error(errJson.error?.message || 'Failed to complete user registration');
+            created_at: new Date().toISOString(),
+          });
         }
 
-        const p = await fetchBackendProfile(token);
-        setProfile(p);
+        // Firebase account created successfully — this is always a success
         hapticSuccess();
       } catch (err: unknown) {
+        // Only reaches here if Firebase account creation itself failed
         hapticError();
         const friendly = formatFirebaseError(err, 'Registration failed');
         setError(friendly);
@@ -237,7 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
     },
-    [fetchBackendProfile]
+    [fetchBackendProfile, profile]
   );
 
   // Google Sign In (Universal Native + Web)

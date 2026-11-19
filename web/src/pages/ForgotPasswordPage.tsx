@@ -87,10 +87,11 @@ export const ForgotPasswordPage: React.FC = () => {
                   variant="primary"
                   size="lg"
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2"
+                  loading={isLoading}
+                  leftIcon={<Mail className="w-4 h-4" />}
+                  className="w-full"
                 >
-                  <Mail className="w-4 h-4" />
-                  <span>Send Reset Link</span>
+                  Send Reset Link
                 </Button>
               </div>
             </form>
