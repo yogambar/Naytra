@@ -590,6 +590,56 @@ export async function completeFirestoreUserProfile(
 }
 
 /**
+ * Records a financial transaction in the user's double-entry ledger in integer paise.
+ */
+export async function recordTransactionInLedger(
+  userId: string,
+  tx: {
+    type: string;
+    amount_paise: number;
+    balance_after_paise: number;
+    description: string;
+    reference_id?: string;
+  }
+): Promise<void> {
+  const txId = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = Timestamp.now();
+  const isCredit = tx.type === 'TRADE_SELL' || tx.type === 'SIGNUP_BONUS' || tx.type === 'DEPOSIT';
+
+  try {
+    const ledgerDocRef = doc(db, 'wallets', userId, 'ledger', txId);
+    await setDoc(ledgerDocRef, {
+      id: txId,
+      tx_id: txId,
+      user_id: userId,
+      account_type: 'USER_CASH',
+      type: tx.type,
+      description: tx.description,
+      debit_paise: isCredit ? 0 : tx.amount_paise,
+      credit_paise: isCredit ? tx.amount_paise : 0,
+      amount_paise: tx.amount_paise,
+      amount_inr: tx.amount_paise / 100,
+      balance_after_paise: tx.balance_after_paise,
+      balance_after_inr: tx.balance_after_paise / 100,
+      is_credit: isCredit,
+      ref_id: tx.reference_id || null,
+      created_at: now,
+    });
+
+    const walletRef = doc(db, 'wallets', userId);
+    await updateDoc(walletRef, {
+      balance_paise: tx.balance_after_paise,
+      total_cash_paise: tx.balance_after_paise,
+      balance_inr: tx.balance_after_paise / 100,
+      total_cash_inr: tx.balance_after_paise / 100,
+      updated_at: now,
+    }).catch(() => null);
+  } catch (err) {
+    console.warn('Deferred recording transaction in Firestore:', err);
+  }
+}
+
+/**
  * Fetch wallet data from Firestore.
  */
 export async function getFirestoreWallet(userId: string): Promise<WalletDoc | null> {

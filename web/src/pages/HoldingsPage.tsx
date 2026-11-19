@@ -1,13 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card3D } from '../design/Card3D';
 import { Tabs } from '../design/Tabs';
 import { Input } from '../design/Input';
 import { Skeleton } from '../design/Skeleton';
 import { Search, TrendingUp, TrendingDown } from 'lucide-react';
+import { fetchMarketTickers, MarketTicker } from '../services/marketService';
+import { StockChartModal } from '../components/market/StockChartModal';
 
 export const HoldingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [tickers, setTickers] = useState<MarketTicker[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [selectedStock, setSelectedStock] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchMarketTickers()
+      .then((data) => {
+        if (data && data.length > 0) setTickers(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // Filter tickers based on search and tab
+  const filteredTickers = tickers.filter((t) => {
+    const matchesSearch =
+      t.symbol.toLowerCase().includes(search.toLowerCase()) ||
+      t.name.toLowerCase().includes(search.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (activeTab === 'gainers') return (t.change_pct ?? 0) > 0;
+    if (activeTab === 'losers') return (t.change_pct ?? 0) < 0;
+    if (activeTab === 'holdings') return t.symbol === 'RELIANCE' || t.symbol === 'INFY';
+    return true;
+  });
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -65,73 +93,76 @@ export const HoldingsPage: React.FC = () => {
 
       {/* Stock List Items */}
       <div className="space-y-3">
-        {[
-          { symbol: 'RELIANCE', name: 'Reliance Industries Ltd.', qty: 1, avg: '₹2,910.00', ltp: '₹2,940.20', pnl: '+₹30.20 (+1.04%)', up: true },
-          { symbol: 'INFY', name: 'Infosys Ltd.', qty: 1, avg: '₹1,945.00', ltp: '₹1,879.80', pnl: '-₹65.20 (-3.35%)', up: false },
-          { symbol: 'ICICIBANK', name: 'ICICI Bank Ltd.', qty: 0, avg: '—', ltp: '₹1,180.50', pnl: '+0.45%', up: true },
-          { symbol: 'BHARTIARTL', name: 'Bharti Airtel Ltd.', qty: 0, avg: '—', ltp: '₹1,410.15', pnl: '+1.80%', up: true },
-          { symbol: 'ITC', name: 'ITC Ltd.', qty: 0, avg: '—', ltp: '₹432.10', pnl: '-0.15%', up: false },
-        ].map((item) => (
-          <Card3D
-            key={item.symbol}
-            elevation="e1"
-            className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-brand-marigold/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-surface-inset flex items-center justify-center font-bold text-xs text-text-primary font-mono border border-surface-border">
-                {item.symbol.slice(0, 3)}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-text-primary">{item.symbol}</span>
-                  {item.qty > 0 && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-marigold-bg text-brand-marigold-text border border-brand-marigold/30">
-                      HOLDING ({item.qty})
+        {filteredTickers.map((item) => {
+          const isUp = (item.change_pct ?? 0) >= 0;
+          return (
+            <Card3D
+              key={item.symbol}
+              elevation="e1"
+              onClick={() => setSelectedStock(item.symbol)}
+              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-purple-500/50 cursor-pointer transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-surface-inset flex items-center justify-center font-bold text-xs text-text-primary font-mono border border-surface-border">
+                  {item.symbol.slice(0, 3)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-text-primary">{item.symbol}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="ML Forecast Active" />
+                    <span className="text-[10px] text-text-tertiary px-1.5 py-0.5 rounded bg-surface-raised border border-surface-border">
+                      {item.sector}
                     </span>
-                  )}
+                  </div>
+                  <div className="text-xs text-text-tertiary">{item.name}</div>
                 </div>
-                <div className="text-xs text-text-tertiary">{item.name}</div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-6">
-              {item.qty > 0 && (
-                <div className="text-left sm:text-right">
-                  <span className="text-[10px] text-text-tertiary uppercase block">Avg Price</span>
-                  <span className="text-xs font-mono font-semibold text-text-secondary">{item.avg}</span>
+              <div className="flex items-center justify-between sm:justify-end gap-6">
+                <div className="text-right">
+                  <span className="text-sm font-bold font-mono text-text-primary block">
+                    ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold inline-flex items-center gap-0.5 ${
+                      isUp ? 'text-brand-up' : 'text-brand-down'
+                    }`}
+                  >
+                    {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                    {isUp ? '+' : ''}{item.change_pct}%
+                  </span>
                 </div>
-              )}
-
-              <div className="text-right">
-                <span className="text-sm font-bold font-mono text-text-primary block">{item.ltp}</span>
-                <span
-                  className={`text-xs font-semibold inline-flex items-center gap-0.5 ${
-                    item.up ? 'text-brand-up' : 'text-brand-down'
-                  }`}
-                >
-                  {item.up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                  {item.pnl}
-                </span>
               </div>
-            </div>
-          </Card3D>
-        ))}
+            </Card3D>
+          );
+        })}
 
         {/* Skeleton loading row */}
-        <div className="p-4 rounded-xl bg-surface-raised border border-surface-border opacity-50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Skeleton width="40px" height="40px" className="rounded-xl" />
-            <div className="space-y-1.5">
-              <Skeleton width="90px" height="16px" />
-              <Skeleton width="140px" height="12px" />
+        {loading && (
+          <div className="p-4 rounded-xl bg-surface-raised border border-surface-border opacity-50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Skeleton width="40px" height="40px" className="rounded-xl" />
+              <div className="space-y-1.5">
+                <Skeleton width="90px" height="16px" />
+                <Skeleton width="140px" height="12px" />
+              </div>
+            </div>
+            <div className="space-y-1.5 text-right">
+              <Skeleton width="70px" height="16px" />
+              <Skeleton width="50px" height="12px" />
             </div>
           </div>
-          <div className="space-y-1.5 text-right">
-            <Skeleton width="70px" height="16px" />
-            <Skeleton width="50px" height="12px" />
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* Stock Chart Modal with Forecasts & LLM Reasoning */}
+      {selectedStock && (
+        <StockChartModal
+          symbol={selectedStock}
+          isOpen={!!selectedStock}
+          onClose={() => setSelectedStock(null)}
+        />
+      )}
     </div>
   );
 };

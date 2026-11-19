@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Card3D } from '../design/Card3D';
 import { DataModeBadge } from '../design/Badge';
-import { Skeleton } from '../design/Skeleton';
 import { Sparkline } from '../design/Sparkline';
-import { TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, History } from 'lucide-react';
+import { TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, History, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getFirestoreWallet } from '../services/firestoreService';
+import { fetchMarketTickers, MarketTicker } from '../services/marketService';
+import { StockChartModal } from '../components/market/StockChartModal';
 
 const sampleSparkline = [72400, 72550, 72480, 72690, 72850, 72800, 72980, 73120];
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -23,6 +24,8 @@ function formatINR(val: number): string {
 export const DashboardPage: React.FC = () => {
   const { idToken, user } = useAuth();
   const [totalValue, setTotalValue] = useState<number>(10000.0);
+  const [tickers, setTickers] = useState<MarketTicker[]>([]);
+  const [selectedStock, setSelectedStock] = useState<string | null>(null);
 
   useEffect(() => {
     // 1. Try reading from Firestore
@@ -35,6 +38,13 @@ export const DashboardPage: React.FC = () => {
         })
         .catch(() => null);
     }
+
+    // 2. Load live market tickers with SWR
+    fetchMarketTickers()
+      .then((t) => {
+        if (t && t.length > 0) setTickers(t.slice(0, 5));
+      })
+      .catch(() => null);
 
     if (!idToken) return;
     fetch(`${API_BASE}/api/v1/wallet`, {
@@ -141,62 +151,81 @@ export const DashboardPage: React.FC = () => {
         </Card3D>
       </div>
 
-      {/* Watchlist & Top Movers (Skeleton state while market stream connects) */}
+      {/* Watchlist & Top Movers */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-text-primary">Sensex 30 Watchlist</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-text-primary">Sensex 30 Watchlist</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-950/60 text-purple-300 border border-purple-800/40 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-purple-400" />
+              ML Forecasts Active
+            </span>
+          </div>
           <Link to="/holdings" className="text-xs font-bold text-brand-marigold-text hover:underline">
             View All 30 Stocks →
           </Link>
         </div>
 
         <div className="space-y-2.5">
-          {[
-            { symbol: 'RELIANCE', name: 'Reliance Industries Ltd.', price: '₹2,940.20', change: '+1.45%', up: true },
-            { symbol: 'TCS', name: 'Tata Consultancy Services', price: '₹4,120.00', change: '-0.32%', up: false },
-            { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd.', price: '₹1,530.80', change: '+0.88%', up: true },
-          ].map((stock) => (
-            <Card3D
-              key={stock.symbol}
-              elevation="e1"
-              className="p-4 flex items-center justify-between cursor-pointer hover:border-brand-marigold/40 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-surface-inset flex items-center justify-center font-bold text-xs text-text-primary font-mono border border-surface-border">
-                  {stock.symbol.slice(0, 2)}
+          {(tickers.length > 0 ? tickers : [
+            { symbol: 'RELIANCE', name: 'Reliance Industries Ltd.', price: 2940.20, change_pct: 1.45 },
+            { symbol: 'TCS', name: 'Tata Consultancy Services', price: 4120.00, change_pct: -0.32 },
+            { symbol: 'HDFCBANK', name: 'HDFC Bank Ltd.', price: 1530.80, change_pct: 0.88 },
+          ]).map((stock) => {
+            const isUp = (stock.change_pct ?? 0) >= 0;
+            return (
+              <Card3D
+                key={stock.symbol}
+                elevation="e1"
+                onClick={() => setSelectedStock(stock.symbol)}
+                className="p-4 flex items-center justify-between cursor-pointer hover:border-purple-500/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-surface-inset flex items-center justify-center font-bold text-xs text-text-primary font-mono border border-surface-border">
+                    {stock.symbol.slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm text-text-primary flex items-center gap-1.5">
+                      {stock.symbol}
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="ML Forecast Available" />
+                    </div>
+                    <div className="text-xs text-text-tertiary">{stock.name}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-bold text-sm text-text-primary">{stock.symbol}</div>
-                  <div className="text-xs text-text-tertiary">{stock.name}</div>
-                </div>
-              </div>
 
-              <div className="text-right">
-                <div className="font-bold font-mono text-sm text-text-primary">{stock.price}</div>
-                <div
-                  className={`text-xs font-semibold ${
-                    stock.up ? 'text-brand-up' : 'text-brand-down'
-                  }`}
-                >
-                  {stock.change}
+                <div className="text-right">
+                  <div className="font-bold font-mono text-sm text-text-primary">
+                    ₹{stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div
+                    className={`text-xs font-semibold ${
+                      isUp ? 'text-brand-up' : 'text-brand-down'
+                    }`}
+                  >
+                    {isUp ? '+' : ''}{stock.change_pct}%
+                  </div>
                 </div>
-              </div>
-            </Card3D>
-          ))}
-
-          {/* Skeleton Loaders for incoming live feed */}
-          <div className="p-4 rounded-xl bg-surface-raised border border-surface-border space-y-2 opacity-60">
-            <div className="flex items-center justify-between">
-              <Skeleton width="120px" height="16px" />
-              <Skeleton width="80px" height="16px" />
-            </div>
-            <div className="flex items-center justify-between">
-              <Skeleton width="160px" height="12px" />
-              <Skeleton width="50px" height="12px" />
-            </div>
-          </div>
+              </Card3D>
+            );
+          })}
         </div>
       </section>
+
+      {/* Stock Chart & Forecast Modal */}
+      {selectedStock && (
+        <StockChartModal
+          symbol={selectedStock}
+          isOpen={!!selectedStock}
+          onClose={() => setSelectedStock(null)}
+          onTradeSuccess={() => {
+            if (user?.uid) {
+              getFirestoreWallet(user.uid).then((w) => {
+                if (w) setTotalValue(w.total_cash_inr || w.total_cash_paise / 100);
+              });
+            }
+          }}
+        />
+      )}
 
       {/* Recent Activity Skeleton */}
       <section className="space-y-3 pt-2">
