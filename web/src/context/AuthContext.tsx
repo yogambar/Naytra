@@ -9,6 +9,13 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth, nativeOrWebGoogleSignIn } from '../lib/firebase';
+import {
+  getFirestoreUserProfile,
+  syncOrInitFirestoreUser,
+  claimFirestoreBonus,
+  completeFirestoreUserProfile,
+  deleteFirestoreUserAccount,
+} from '../services/firestoreService';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 
 export interface UserProfileData {
@@ -33,7 +40,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   error: string | null;
   clearError: () => void;
-  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<{ bonusClaimed: boolean }>;
   signUpWithEmail: (
     email: string,
     pass: string,
@@ -41,8 +48,8 @@ export interface AuthContextType {
     dob: string,
     phone?: string,
     city?: string
-  ) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  ) => Promise<{ isNewUser: boolean }>;
+  signInWithGoogle: () => Promise<{ isNewUser: boolean; bonusClaimed: boolean } | null>;
   sendPasswordReset: (email: string) => Promise<void>;
   resendVerificationEmail: () => Promise<void>;
   completeUserProfile: (data: {
@@ -52,6 +59,8 @@ export interface AuthContextType {
     city?: string;
     terms_accepted: boolean;
   }) => Promise<void>;
+  claimBonus: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refreshProfile: () => Promise<UserProfileData | null>;
   logout: () => Promise<void>;
   // Mock login helper for testing and offline environments
@@ -103,35 +112,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Fetch local user record from backend /api/v1/me
-  const fetchBackendProfile = useCallback(async (token: string): Promise<UserProfileData | null> => {
+  // Fetch user profile: Primary source is Firestore, with backend fallback
+  const fetchUserProfile = useCallback(async (fbUser: User): Promise<UserProfileData | null> => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) {
-        return null;
+      // 1. Try Firestore direct
+      let p = await getFirestoreUserProfile(fbUser.uid);
+      if (!p) {
+        // Doc not found in Firestore -> initialize it
+        const initResult = await syncOrInitFirestoreUser(fbUser);
+        p = initResult.profile;
       }
-      const json = await res.json();
-      if (json.ok && json.data) {
-        return json.data as UserProfileData;
+      return p;
+    } catch (firestoreErr) {
+      console.warn('Firestore profile fetch failed, trying backend API:', firestoreErr);
+      // 2. Fallback to API if available
+      try {
+        const token = await fbUser.getIdToken();
+        const res = await fetch(`${API_BASE}/api/v1/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.data) return json.data as UserProfileData;
+        }
+      } catch (apiErr) {
+        console.warn('Backend API profile fetch also failed:', apiErr);
       }
-      return null;
-    } catch (err) {
-      console.warn('Could not fetch user profile from API:', err);
       return null;
     }
   }, []);
 
-  // Refresh profile from backend
+  // Refresh profile from Firestore
   const refreshProfile = useCallback(async (): Promise<UserProfileData | null> => {
-    if (!idToken) return null;
-    const p = await fetchBackendProfile(idToken);
+    if (!auth.currentUser) return null;
+    const p = await fetchUserProfile(auth.currentUser);
     if (p) setProfile(p);
     return p;
-  }, [idToken, fetchBackendProfile]);
+  }, [fetchUserProfile]);
 
   // Listen to Firebase auth state changes
   useEffect(() => {
@@ -171,10 +188,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const token = await fbUser.getIdToken();
           if (isMounted) setIdToken(token);
-          const p = await fetchBackendProfile(token);
-          if (isMounted) setProfile(p);
+          const p = await fetchUserProfile(fbUser);
+          if (isMounted && p) setProfile(p);
         } catch (err) {
-          console.error('Error fetching token or profile:', err);
+          console.error('Error in onAuthStateChanged:', err);
         }
       } else {
         if (!idToken?.startsWith('mock-token:')) {
@@ -189,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isMounted = false;
       unsubscribe();
     };
-  }, [fetchBackendProfile, idToken]);
+  }, [fetchUserProfile, idToken]);
 
   // Sign In with Email & Password
   const signInWithEmailHandler = useCallback(async (email: string, pass: string) => {
@@ -199,9 +216,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
       const token = await cred.user.getIdToken();
       setIdToken(token);
-      const p = await fetchBackendProfile(token);
-      setProfile(p);
+
+      const p = await fetchUserProfile(cred.user);
+      if (p) setProfile(p);
       hapticSuccess();
+      return { bonusClaimed: Boolean(p?.bonus_claimed) };
     } catch (err: unknown) {
       hapticError();
       const friendly = formatFirebaseError(err, 'Invalid email or password. Please try again.');
@@ -210,7 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [fetchBackendProfile]);
+  }, [fetchUserProfile]);
 
   // Sign Up with Email & Password
   const signUpWithEmailHandler = useCallback(
@@ -225,7 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       setIsLoading(true);
       try {
-        // Step 1: Create Firebase account — this is the critical step
+        // Step 1: Create Firebase account
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
 
         // Step 2: Send email verification (fire-and-forget)
@@ -236,55 +255,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const token = await cred.user.getIdToken();
         setIdToken(token);
 
-        // Step 3: Try backend profile sync (best-effort — backend may be down)
-        try {
-          const completeRes = await fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              name: name.trim(),
-              dob,
-              phone: phone?.trim() || null,
-              city: city?.trim() || null,
-              terms_accepted: true,
-            }),
-          });
+        // Step 3: Write user, wallet, and ledger directly to Firestore
+        const initResult = await syncOrInitFirestoreUser(cred.user, {
+          name: name.trim(),
+          dob,
+          phone: phone?.trim(),
+          city: city?.trim(),
+          terms_accepted: true,
+        });
 
-          if (completeRes.ok) {
-            const p = await fetchBackendProfile(token);
-            setProfile(p);
-          } else {
-            console.warn('Backend profile sync returned non-OK, will retry on next sign-in');
-          }
-        } catch (backendErr) {
-          // Backend unreachable — that's OK for local dev without Docker/Postgres
-          console.warn('Backend profile sync failed (server may be down):', backendErr);
-        }
+        setProfile(initResult.profile);
 
-        // Step 4: Set a minimal local profile so the UI knows who the user is
-        if (!profile) {
-          setProfile({
-            id: cred.user.uid,
-            email: cred.user.email || email.trim(),
+        // Best effort: notify backend if running
+        fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
             name: name.trim(),
             dob,
             phone: phone?.trim() || null,
             city: city?.trim() || null,
-            profile_complete: false,
-            email_verified: false,
             terms_accepted: true,
-            bonus_claimed: false,
-            created_at: new Date().toISOString(),
-          });
-        }
+          }),
+        }).catch(() => null);
 
-        // Firebase account created successfully — this is always a success
         hapticSuccess();
+        return { isNewUser: true };
       } catch (err: unknown) {
-        // Only reaches here if Firebase account creation itself failed
         hapticError();
         const friendly = formatFirebaseError(err, 'Registration failed');
         setError(friendly);
@@ -293,7 +293,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
     },
-    [fetchBackendProfile, profile]
+    []
   );
 
   // Google Sign In (Universal Native + Web)
@@ -305,10 +305,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cred?.user) {
         const token = await cred.user.getIdToken();
         setIdToken(token);
-        const p = await fetchBackendProfile(token);
-        setProfile(p);
+
+        // Sync or initialize in Firestore
+        const result = await syncOrInitFirestoreUser(cred.user);
+        setProfile(result.profile);
         hapticSuccess();
+        return {
+          isNewUser: result.isNewUser,
+          bonusClaimed: Boolean(result.profile.bonus_claimed),
+        };
       }
+      return null;
     } catch (err: unknown) {
       hapticError();
       const friendly = formatFirebaseError(err, 'Google sign-in was canceled or failed. Please try again.');
@@ -317,7 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [fetchBackendProfile]);
+  }, []);
 
   // Send Password Reset Email
   const sendPasswordResetHandler = useCallback(async (email: string) => {
@@ -326,7 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await sendPasswordResetEmail(auth, email.trim());
       hapticSuccess();
     } catch {
-      // Enumeration safe: do not leak whether user exists or not
+      // Enumeration safe
       hapticSuccess();
     }
   }, []);
@@ -342,25 +349,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Complete User Profile (e.g. for Google sign-in users)
   const completeUserProfileHandler = useCallback(
     async (data: { name: string; dob: string; phone?: string; city?: string; terms_accepted: boolean }) => {
-      if (!idToken) throw new Error('Not authenticated');
+      if (!auth.currentUser) throw new Error('Not authenticated');
       setError(null);
       setIsLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify(data),
-        });
+        await completeFirestoreUserProfile(auth.currentUser.uid, data);
+        const p = await getFirestoreUserProfile(auth.currentUser.uid);
+        if (p) setProfile(p);
 
-        const json = await res.json();
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error?.message || 'Could not complete profile');
+        // Best-effort backend notification
+        if (idToken) {
+          fetch(`${API_BASE}/api/v1/auth/complete-profile`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify(data),
+          }).catch(() => null);
         }
 
-        setProfile(json.data as UserProfileData);
         hapticSuccess();
       } catch (err: unknown) {
         hapticError();
@@ -374,6 +382,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [idToken]
   );
 
+  // Claim Signup Bonus
+  const claimBonusHandler = useCallback(async () => {
+    if (!auth.currentUser) return;
+    try {
+      await claimFirestoreBonus(auth.currentUser.uid);
+      setProfile((prev) => (prev ? { ...prev, bonus_claimed: true } : null));
+
+      // Best effort backend notification
+      if (idToken) {
+        fetch(`${API_BASE}/api/v1/auth/claim-bonus`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${idToken}` },
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.warn('Error claiming bonus in Firestore:', err);
+      setProfile((prev) => (prev ? { ...prev, bonus_claimed: true } : null));
+    }
+  }, [idToken]);
+
+  // Delete User Account
+  const deleteAccountHandler = useCallback(async () => {
+    if (!auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    setIsLoading(true);
+    try {
+      await deleteFirestoreUserAccount(uid);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('naytra_mock_token');
+      }
+      setUser(null);
+      setProfile(null);
+      setIdToken(null);
+      hapticSuccess();
+    } catch (err) {
+      hapticError();
+      console.error('Delete account failed:', err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Logout
   const logoutHandler = useCallback(async () => {
     try {
@@ -381,7 +432,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('naytra_mock_token');
       }
       if (idToken) {
-        await fetch(`${API_BASE}/api/v1/auth/logout`, {
+        fetch(`${API_BASE}/api/v1/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${idToken}` },
         }).catch(() => null);
@@ -403,11 +454,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('naytra_mock_token', mockToken);
       }
       setIdToken(mockToken);
-      const p = await fetchBackendProfile(mockToken);
-      setProfile(p);
+      setProfile({
+        id: uid,
+        email,
+        name: 'Mock Trader',
+        dob: '1995-01-01',
+        phone: null,
+        city: null,
+        profile_complete: true,
+        email_verified: verified,
+        terms_accepted: true,
+        bonus_claimed: true,
+        created_at: new Date().toISOString(),
+      });
       setIsLoading(false);
     },
-    [fetchBackendProfile]
+    []
   );
 
   const value = useMemo(
@@ -425,6 +487,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendPasswordReset: sendPasswordResetHandler,
       resendVerificationEmail: resendVerificationEmailHandler,
       completeUserProfile: completeUserProfileHandler,
+      claimBonus: claimBonusHandler,
+      deleteAccount: deleteAccountHandler,
       refreshProfile,
       logout: logoutHandler,
       loginWithMockUser,
@@ -442,6 +506,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendPasswordResetHandler,
       resendVerificationEmailHandler,
       completeUserProfileHandler,
+      claimBonusHandler,
+      deleteAccountHandler,
       refreshProfile,
       logoutHandler,
       loginWithMockUser,
@@ -458,3 +524,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+

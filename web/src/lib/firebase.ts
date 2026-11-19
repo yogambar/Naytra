@@ -8,6 +8,7 @@ import {
   type Auth,
   type UserCredential,
 } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
@@ -23,6 +24,7 @@ const firebaseConfig = {
 // Initialize Firebase only once
 export const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth: Auth = getAuth(app);
+export const db: Firestore = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Connect to Auth emulator if configured in environment
@@ -30,6 +32,13 @@ const emulatorHost = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST;
 if (emulatorHost) {
   const [host, port] = emulatorHost.split(':');
   connectAuthEmulator(auth, `http://${host || 'localhost'}:${port || 9099}`, { disableWarnings: true });
+}
+
+// Connect to Firestore emulator if configured in environment
+const firestoreEmulatorHost = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST;
+if (firestoreEmulatorHost) {
+  const [host, port] = firestoreEmulatorHost.split(':');
+  connectFirestoreEmulator(db, host || 'localhost', Number(port) || 8080);
 }
 
 /**

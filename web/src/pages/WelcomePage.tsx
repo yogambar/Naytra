@@ -15,8 +15,12 @@ export const WelcomePage: React.FC = () => {
   const handleGoogleClick = async () => {
     hapticTick();
     try {
-      await signInWithGoogle();
-      navigate('/dashboard');
+      const res = await signInWithGoogle();
+      if (res?.isNewUser || !res?.bonusClaimed) {
+        navigate('/signup-bonus');
+      } else {
+        navigate('/dashboard');
+      }
     } catch {
       // Error handled by AuthContext
     }

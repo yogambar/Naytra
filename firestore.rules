@@ -1,0 +1,278 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users/{userId}
+// Document ID: userId (must match authenticated request.auth.uid)
+// Fields:
+//   - id: string (required, 1-128 chars, matches userId) - Firebase Auth UID
+//   - email: string (required, valid email pattern, max 255 chars) - User email address
+//   - name: string | null (optional, max 255 chars) - Full name of the user
+//   - dob: string | null (optional, max 32 chars) - Date of birth (YYYY-MM-DD or ISO string)
+//   - phone: string | null (optional, max 32 chars) - Phone number
+//   - city: string | null (optional, max 128 chars) - City / location
+//   - profile_complete: bool (required) - Profile completion status flag
+//   - email_verified: bool (required) - Email verification status flag
+//   - terms_accepted: bool (required) - Terms & conditions acceptance flag
+//   - bonus_claimed: bool (required) - Virtual signup bonus claimed status flag
+//   - created_at: timestamp (required, immutable) - Account creation timestamp
+//   - updated_at: timestamp (required) - Profile last update timestamp
+//
+// Collection: wallets/{userId}
+// Document ID: userId (must match authenticated request.auth.uid)
+// Fields:
+//   - user_id: string (required, 1-128 chars, matches userId) - Owning user UID
+//   - balance_paise: int (required, >= 0) - Available virtual cash balance in integer paise
+//   - locked_paise: int (required, >= 0) - Cash reserved/locked in pending orders
+//   - total_cash_paise: int (required, >= 0) - Total virtual cash (balance + locked) in paise
+//   - initial_grant_paise: int (required, >= 0, immutable) - Initial signup grant in paise (₹10,000 = 1,000,000 paise)
+//   - currency: string (required, 1-10 chars, e.g., 'INR') - Virtual currency denomination
+//   - is_virtual: bool (required, must be true, immutable) - Paper trading simulation invariant
+//   - created_at: timestamp (required, immutable) - Wallet creation timestamp
+//   - updated_at: timestamp (required) - Wallet last update timestamp
+//   - balance_inr: float | int (optional) - Cached display representation in INR
+//   - locked_inr: float | int (optional) - Cached display representation in INR
+//   - total_cash_inr: float | int (optional) - Cached display representation in INR
+//   - initial_grant_inr: float | int (optional) - Cached display representation in INR
+//
+// Collection: wallets/{userId}/ledger/{entryId}
+// Document ID: entryId (unique ledger transaction record ID)
+// Description: Double-entry audit ledger history. Strictly append-only (immutable once written).
+// Fields:
+//   - id: string (required, 1-128 chars) - Ledger entry identifier
+//   - tx_id: string (required, 1-128 chars) - Double-entry transaction correlation ID
+//   - user_id: string (optional, 1-128 chars, matches userId if present) - Owning user UID
+//   - account_type: string (optional, max 32 chars, e.g. USER_CASH, SYSTEM_RESERVE) - Account classification
+//   - type: string (required, max 32 chars, e.g. SIGNUP_BONUS, BUY, SELL, BROKERAGE) - Transaction event type
+//   - description: string (required, max 255 chars) - Human-readable transaction narration
+//   - debit_paise: int (required, >= 0) - Debit amount in integer paise
+//   - credit_paise: int (required, >= 0) - Credit amount in integer paise
+//   - amount_paise: int (required) - Net amount change in paise (credit_paise - debit_paise)
+//   - balance_after_paise: int (required, >= 0) - Virtual cash balance in paise immediately after entry
+//   - ref_id: string | null (optional, max 128 chars) - External reference ID (order_id, trade_id)
+//   - created_at: timestamp (required) - Timestamp when ledger transaction was recorded
+//   - amount_inr: float | int (optional) - Cached net amount in INR
+//   - balance_after_inr: float | int (optional) - Cached post-transaction balance in INR
+//   - is_credit: bool (optional) - Flag indicating credit transaction
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is the owner of the document path
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate email format and bounded length
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() <= 255 &&
+        email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // Validate bounded string length
+    function isValidString(val, minLen, maxLen) {
+      return val is string &&
+        val.size() >= minLen &&
+        val.size() <= maxLen;
+    }
+
+    // Validate optional string (if present, must be string or null within length bounds)
+    function isValidOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) || data[field] == null ||
+        (data[field] is string && data[field].size() >= minLen && data[field].size() <= maxLen);
+    }
+
+    // Validate non-negative integer amount (for integer paise)
+    function isNonNegativeInt(val) {
+      return val is int && val >= 0;
+    }
+
+    // Validate numeric value (int or float, for optional INR display fields)
+    function isNumberVal(val) {
+      return val is int || val is float;
+    }
+
+    // Validate that immutable fields remain strictly unchanged across updates
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validate user profile schema and invariants
+    function isValidUser(data, userId) {
+      let allowedFields = [
+        'id', 'email', 'name', 'dob', 'phone', 'city',
+        'profile_complete', 'email_verified', 'terms_accepted', 'bonus_claimed',
+        'created_at', 'updated_at'
+      ];
+      let requiredFields = [
+        'id', 'email', 'profile_complete', 'email_verified',
+        'terms_accepted', 'bonus_claimed', 'created_at', 'updated_at'
+      ];
+      return data.keys().hasAll(requiredFields) &&
+        data.keys().hasOnly(allowedFields) &&
+        data.id == userId &&
+        data.id == request.auth.uid &&
+        data.id.size() <= 128 &&
+        isValidEmail(data.email) &&
+        isValidOptionalString(data, 'name', 1, 255) &&
+        isValidOptionalString(data, 'dob', 4, 32) &&
+        isValidOptionalString(data, 'phone', 5, 32) &&
+        isValidOptionalString(data, 'city', 1, 128) &&
+        data.profile_complete is bool &&
+        data.email_verified is bool &&
+        data.terms_accepted is bool &&
+        data.bonus_claimed is bool &&
+        data.created_at is timestamp &&
+        data.updated_at is timestamp;
+    }
+
+    // Validate virtual wallet schema and paper-trading invariants
+    function isValidWallet(data, userId) {
+      let allowedFields = [
+        'user_id', 'balance_paise', 'locked_paise', 'total_cash_paise',
+        'initial_grant_paise', 'currency', 'is_virtual', 'created_at', 'updated_at',
+        'balance_inr', 'locked_inr', 'total_cash_inr', 'initial_grant_inr'
+      ];
+      let requiredFields = [
+        'user_id', 'balance_paise', 'locked_paise', 'total_cash_paise',
+        'initial_grant_paise', 'currency', 'is_virtual', 'created_at', 'updated_at'
+      ];
+      return data.keys().hasAll(requiredFields) &&
+        data.keys().hasOnly(allowedFields) &&
+        data.user_id == userId &&
+        data.user_id == request.auth.uid &&
+        data.user_id.size() <= 128 &&
+        isNonNegativeInt(data.balance_paise) &&
+        isNonNegativeInt(data.locked_paise) &&
+        isNonNegativeInt(data.total_cash_paise) &&
+        isNonNegativeInt(data.initial_grant_paise) &&
+        isValidString(data.currency, 1, 10) &&
+        data.is_virtual == true &&
+        data.created_at is timestamp &&
+        data.updated_at is timestamp &&
+        (!('balance_inr' in data) || isNumberVal(data.balance_inr)) &&
+        (!('locked_inr' in data) || isNumberVal(data.locked_inr)) &&
+        (!('total_cash_inr' in data) || isNumberVal(data.total_cash_inr)) &&
+        (!('initial_grant_inr' in data) || isNumberVal(data.initial_grant_inr));
+    }
+
+    // Validate double-entry ledger entry schema and invariants
+    function isValidLedgerEntry(data, userId, entryId) {
+      let allowedFields = [
+        'id', 'tx_id', 'user_id', 'account_type', 'type', 'description',
+        'debit_paise', 'credit_paise', 'amount_paise', 'balance_after_paise',
+        'ref_id', 'created_at', 'amount_inr', 'balance_after_inr', 'is_credit'
+      ];
+      let requiredFields = [
+        'id', 'tx_id', 'type', 'description',
+        'debit_paise', 'credit_paise', 'amount_paise', 'balance_after_paise',
+        'created_at'
+      ];
+      return data.keys().hasAll(requiredFields) &&
+        data.keys().hasOnly(allowedFields) &&
+        data.id is string &&
+        data.id.size() >= 1 &&
+        data.id.size() <= 128 &&
+        (data.id == entryId || entryId.size() > 0) &&
+        isValidString(data.tx_id, 1, 128) &&
+        isValidString(data.type, 1, 32) &&
+        isValidString(data.description, 1, 255) &&
+        isNonNegativeInt(data.debit_paise) &&
+        isNonNegativeInt(data.credit_paise) &&
+        data.amount_paise is int &&
+        isNonNegativeInt(data.balance_after_paise) &&
+        data.created_at is timestamp &&
+        isValidOptionalString(data, 'ref_id', 1, 128) &&
+        isValidOptionalString(data, 'account_type', 1, 32) &&
+        (!('user_id' in data) || data.user_id == userId) &&
+        (!('is_credit' in data) || data.is_credit is bool) &&
+        (!('amount_inr' in data) || isNumberVal(data.amount_inr)) &&
+        (!('balance_after_inr' in data) || isNumberVal(data.balance_after_inr));
+    }
+
+    // ===============================================================
+    // Collection Match Rules
+    // ===============================================================
+
+    // Root Default Deny: Disallow all unlisted reads/writes across the database
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------
+    // 1. User Profiles Collection: users/{userId}
+    // ---------------------------------------------------------------
+    match /users/{userId} {
+      // Authenticated users can only read their own user profile document
+      allow read: if isOwner(userId);
+
+      // Authenticated users can create their own profile document with valid initial data
+      allow create: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId);
+
+      // Authenticated users can update their own profile document with immutable fields protected
+      allow update: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId) &&
+                       areImmutableFieldsUnchanged(['id', 'created_at']);
+
+      // Authenticated users can delete their own profile document upon account removal
+      allow delete: if isOwner(userId);
+    }
+
+    // ---------------------------------------------------------------
+    // 2. Virtual Wallets Collection: wallets/{userId}
+    // ---------------------------------------------------------------
+    match /wallets/{userId} {
+      // Authenticated users can only read their own wallet document
+      allow read: if isOwner(userId);
+
+      // Authenticated users can create their initial virtual wallet
+      allow create: if isOwner(userId) &&
+                       isValidWallet(request.resource.data, userId);
+
+      // Authenticated users can update their wallet while keeping immutable fields protected
+      allow update: if isOwner(userId) &&
+                       isValidWallet(request.resource.data, userId) &&
+                       areImmutableFieldsUnchanged(['user_id', 'created_at', 'initial_grant_paise', 'is_virtual']);
+
+      // Authenticated users can delete their wallet upon account removal
+      allow delete: if isOwner(userId);
+
+      // -------------------------------------------------------------
+      // 3. Double-Entry Ledger Subcollection: wallets/{userId}/ledger/{entryId}
+      // -------------------------------------------------------------
+      match /ledger/{entryId} {
+        // Authenticated users can read their own double-entry ledger history
+        allow read: if isOwner(userId);
+
+        // Authenticated users can create valid ledger transaction entries
+        allow create: if isOwner(userId) &&
+                         isValidLedgerEntry(request.resource.data, userId, entryId);
+
+        // Double-entry ledger entries are strictly immutable audit records: updates are denied
+        allow update: if false;
+
+        // Authenticated users can delete ledger entries upon account removal
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

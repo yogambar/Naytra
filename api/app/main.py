@@ -38,9 +38,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await conn.execute(text("SELECT 1"))
     except Exception as exc:
         if settings.DEBUG:
-            logger.warning("Primary database %s unavailable, falling back to local SQLite: %s", settings.DATABASE_URL, exc)
+            logger.warning("Primary database %s unavailable in debug mode: %s. Using in-memory fallback.", settings.DATABASE_URL, exc)
             await engine.dispose()
-            engine = build_engine("sqlite+aiosqlite:///./naytra.db", echo=False)
+            engine = build_engine("sqlite+aiosqlite:///:memory:", echo=False)
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
         else:

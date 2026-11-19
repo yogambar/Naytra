@@ -4,14 +4,17 @@ import { ThemeToggle } from '../design/ThemeToggle';
 import { DataModeBadge } from '../design/Badge';
 import { Button } from '../design/Button';
 import { hapticTick } from '../utils/haptics';
-import { Smartphone, ExternalLink, Sliders, Palette, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Smartphone, ExternalLink, Sliders, Palette, LogOut, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, deleteAccount } = useAuth();
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const toggleHaptics = () => {
     const next = !hapticsEnabled;
@@ -25,6 +28,20 @@ export const ProfilePage: React.FC = () => {
     hapticTick();
     await logout();
     navigate('/welcome');
+  };
+
+  const handleDeleteAccount = async () => {
+    hapticTick();
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      navigate('/welcome');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete account';
+      setDeleteError(msg);
+      setIsDeleting(false);
+    }
   };
 
   const displayName = profile?.name || user?.displayName || 'Registered Paper Trader';
@@ -183,6 +200,60 @@ export const ProfilePage: React.FC = () => {
             <ExternalLink className="w-4 h-4 text-text-tertiary" />
           </Link>
         </div>
+      </Card3D>
+
+      {/* Danger Zone: Delete Account */}
+      <Card3D elevation="e2" className="p-5 space-y-3 border-brand-down/30 bg-brand-down/5">
+        <div className="flex items-center gap-2 text-sm font-bold text-brand-down border-b border-brand-down/20 pb-3">
+          <Trash2 className="w-4 h-4 text-brand-down" />
+          Danger Zone
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div>
+            <span className="text-sm font-semibold text-text-primary block">Delete Account</span>
+            <span className="text-xs text-text-secondary">
+              Permanently erase your account, virtual wallet, and trading history from Firestore.
+            </span>
+          </div>
+
+          {!showDeleteConfirm ? (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              Delete Account
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                loading={isDeleting}
+                disabled={isDeleting}
+                onClick={handleDeleteAccount}
+              >
+                Confirm Delete
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {deleteError && (
+          <p className="text-xs text-brand-down mt-2 font-medium">
+            {deleteError}
+          </p>
+        )}
       </Card3D>
     </div>
   );

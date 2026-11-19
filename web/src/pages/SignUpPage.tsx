@@ -132,8 +132,12 @@ export const SignUpPage: React.FC = () => {
     clearError();
     setFormError(null);
     try {
-      await signInWithGoogle();
-      navigate('/dashboard');
+      const res = await signInWithGoogle();
+      if (res?.isNewUser || !res?.bonusClaimed) {
+        navigate('/signup-bonus', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Google sign-in was canceled or failed. Please try again.';
       setFormError(msg);

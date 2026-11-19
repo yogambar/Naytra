@@ -4,6 +4,7 @@ import { Skeleton } from '../design/Skeleton';
 import { Button } from '../design/Button';
 import { ArrowDownLeft, ArrowUpRight, ShieldCheck, Info, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getFirestoreWallet, getFirestoreLedger } from '../services/firestoreService';
 import { hapticTick, hapticSuccess } from '../utils/haptics';
 
 interface WalletResponseData {
@@ -99,30 +100,78 @@ export const WalletPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchWalletAndLedger = useCallback(async () => {
+    setError(null);
+
+    // 1. Try reading directly from Firestore
+    if (user?.uid) {
+      try {
+        const [fw, fl] = await Promise.all([
+          getFirestoreWallet(user.uid),
+          getFirestoreLedger(user.uid),
+        ]);
+        if (fw) {
+          setWallet({
+            user_id: fw.user_id,
+            balance_paise: fw.balance_paise,
+            balance_inr: fw.balance_inr || fw.balance_paise / 100,
+            locked_paise: fw.locked_paise,
+            locked_inr: fw.locked_inr || fw.locked_paise / 100,
+            total_cash_paise: fw.total_cash_paise,
+            total_cash_inr: fw.total_cash_inr || fw.total_cash_paise / 100,
+            initial_grant_paise: fw.initial_grant_paise,
+            initial_grant_inr: fw.initial_grant_inr || fw.initial_grant_paise / 100,
+            currency: fw.currency,
+            is_virtual: fw.is_virtual,
+          });
+        }
+        if (fl && fl.length > 0) {
+          setLedger(
+            fl.map((item) => ({
+              id: item.id,
+              tx_id: item.tx_id,
+              type: item.type,
+              description: item.description,
+              debit_paise: item.debit_paise,
+              credit_paise: item.credit_paise,
+              amount_paise: item.amount_paise,
+              amount_inr: item.amount_inr ?? (item.amount_paise / 100),
+              balance_after_paise: item.balance_after_paise,
+              balance_after_inr: item.balance_after_inr ?? (item.balance_after_paise / 100),
+              is_credit: Boolean(item.is_credit),
+              ref_id: item.ref_id ?? null,
+              created_at: item.created_at,
+            }))
+          );
+        }
+      } catch (fErr) {
+        console.warn('Could not read wallet from Firestore:', fErr);
+      }
+    }
+
     if (!idToken) {
       setIsLoading(false);
       return;
     }
 
+    // 2. Also check backend API if active
     try {
-      setError(null);
       const [walletRes, ledgerRes] = await Promise.all([
         fetch(`${API_BASE}/api/v1/wallet`, {
           headers: { Authorization: `Bearer ${idToken}` },
-        }),
+        }).catch(() => null),
         fetch(`${API_BASE}/api/v1/wallet/ledger?limit=50&offset=0`, {
           headers: { Authorization: `Bearer ${idToken}` },
-        }),
+        }).catch(() => null),
       ]);
 
-      if (walletRes.ok) {
+      if (walletRes && walletRes.ok) {
         const wJson = await walletRes.json();
         if (wJson.ok && wJson.data) {
           setWallet(wJson.data);
         }
       }
 
-      if (ledgerRes.ok) {
+      if (ledgerRes && ledgerRes.ok) {
         const lJson = await ledgerRes.json();
         if (lJson.ok && lJson.data && Array.isArray(lJson.data.items)) {
           setLedger(lJson.data.items);

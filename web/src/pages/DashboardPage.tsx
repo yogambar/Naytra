@@ -6,6 +6,7 @@ import { Sparkline } from '../design/Sparkline';
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getFirestoreWallet } from '../services/firestoreService';
 
 const sampleSparkline = [72400, 72550, 72480, 72690, 72850, 72800, 72980, 73120];
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -20,10 +21,21 @@ function formatINR(val: number): string {
 }
 
 export const DashboardPage: React.FC = () => {
-  const { idToken } = useAuth();
+  const { idToken, user } = useAuth();
   const [totalValue, setTotalValue] = useState<number>(10000.0);
 
   useEffect(() => {
+    // 1. Try reading from Firestore
+    if (user?.uid) {
+      getFirestoreWallet(user.uid)
+        .then((w) => {
+          if (w) {
+            setTotalValue(w.total_cash_inr || w.total_cash_paise / 100);
+          }
+        })
+        .catch(() => null);
+    }
+
     if (!idToken) return;
     fetch(`${API_BASE}/api/v1/wallet`, {
       headers: { Authorization: `Bearer ${idToken}` },
@@ -35,7 +47,7 @@ export const DashboardPage: React.FC = () => {
         }
       })
       .catch(() => null);
-  }, [idToken]);
+  }, [idToken, user?.uid]);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">

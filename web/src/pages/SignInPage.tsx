@@ -33,8 +33,12 @@ export const SignInPage: React.FC = () => {
 
     hapticTick();
     try {
-      await signInWithEmail(email, password);
-      navigate(from, { replace: true });
+      const res = await signInWithEmail(email, password);
+      if (!res.bonusClaimed) {
+        navigate('/signup-bonus', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Invalid email or password. Please try again.';
       setFormError(msg);
@@ -46,8 +50,12 @@ export const SignInPage: React.FC = () => {
     clearError();
     setFormError(null);
     try {
-      await signInWithGoogle();
-      navigate(from, { replace: true });
+      const res = await signInWithGoogle();
+      if (res?.isNewUser || !res?.bonusClaimed) {
+        navigate('/signup-bonus', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Google sign-in was canceled or failed. Please try again.';
       setFormError(msg);

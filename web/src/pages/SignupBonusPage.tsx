@@ -11,33 +11,19 @@ const CoinVirtual3D = React.lazy(() =>
   import('../three/CoinVirtual3D').then((m) => ({ default: m.CoinVirtual3D }))
 );
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 export const SignupBonusPage: React.FC = () => {
   const navigate = useNavigate();
-  const { idToken, refreshProfile } = useAuth();
+  const { claimBonus } = useAuth();
   const [claiming, setClaiming] = useState(false);
 
   const handleStartTrading = async () => {
     hapticTick();
     setClaiming(true);
     try {
-      // Call API to mark bonus as claimed
-      if (idToken) {
-        await fetch(`${API_BASE}/api/v1/auth/claim-bonus`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-          },
-        }).catch((err) => console.warn('Bonus claim API call failed:', err));
-      }
-
-      // Refresh the profile to pick up bonus_claimed = true
-      await refreshProfile();
+      await claimBonus();
       hapticSuccess();
       navigate('/dashboard', { replace: true });
     } catch {
-      // Even if the API fails, navigate to dashboard
       hapticSuccess();
       navigate('/dashboard', { replace: true });
     } finally {
