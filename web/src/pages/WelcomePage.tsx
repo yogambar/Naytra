@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, ShieldCheck } from 'lucide-react';
 import { LogoN3D } from '../three/LogoN3D';
 import { LogoNFallback } from '../three/Fallbacks';
 import { Button } from '../design/Button';
@@ -38,12 +38,6 @@ export const WelcomePage: React.FC = () => {
             NAYTRA
           </span>
         </div>
-        <Link
-          to="/signin"
-          className="text-sm font-semibold text-text-secondary hover:text-brand-marigold transition-colors"
-        >
-          Sign In
-        </Link>
       </header>
 
       {/* Hero Section */}
@@ -115,13 +109,12 @@ export const WelcomePage: React.FC = () => {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.4 }}
-          className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm"
+          className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-md"
         >
           <Button
             variant="primary"
             size="lg"
-            rightIcon={<ArrowRight className="w-4 h-4" />}
-            className="w-full"
+            className="w-full whitespace-nowrap"
             onClick={() => {
               hapticTick();
               navigate('/signup');
@@ -133,7 +126,7 @@ export const WelcomePage: React.FC = () => {
           <Button
             variant="secondary"
             size="lg"
-            className="w-full"
+            className="w-full whitespace-nowrap"
             onClick={() => {
               hapticTick();
               navigate('/signin');
@@ -148,7 +141,7 @@ export const WelcomePage: React.FC = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-          className="mt-4 w-full max-w-sm"
+          className="mt-4 w-full max-w-md"
         >
           <button
             type="button"

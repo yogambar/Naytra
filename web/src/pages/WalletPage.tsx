@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card3D } from '../design/Card3D';
 import { Skeleton } from '../design/Skeleton';
 import { Button } from '../design/Button';
@@ -98,8 +98,10 @@ export const WalletPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
 
   const fetchWalletAndLedger = useCallback(async () => {
+    if (!isMountedRef.current) return;
     setError(null);
 
     // 1. Try reading directly from Firestore
@@ -109,6 +111,7 @@ export const WalletPage: React.FC = () => {
           getFirestoreWallet(user.uid),
           getFirestoreLedger(user.uid),
         ]);
+        if (!isMountedRef.current) return;
         if (fw) {
           setWallet({
             user_id: fw.user_id,
@@ -149,7 +152,7 @@ export const WalletPage: React.FC = () => {
     }
 
     if (!idToken) {
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
       return;
     }
 
@@ -164,30 +167,37 @@ export const WalletPage: React.FC = () => {
         }).catch(() => null),
       ]);
 
+      if (!isMountedRef.current) return;
+
       if (walletRes && walletRes.ok) {
         const wJson = await walletRes.json();
-        if (wJson.ok && wJson.data) {
+        if (wJson.ok && wJson.data && isMountedRef.current) {
           setWallet(wJson.data);
         }
       }
 
       if (ledgerRes && ledgerRes.ok) {
         const lJson = await ledgerRes.json();
-        if (lJson.ok && lJson.data && Array.isArray(lJson.data.items)) {
+        if (lJson.ok && lJson.data && Array.isArray(lJson.data.items) && isMountedRef.current) {
           setLedger(lJson.data.items);
         }
       }
     } catch (err) {
       console.warn('Could not fetch wallet data from API, using cached state:', err);
-      // Keep optimistic/initial grant state
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
-  }, [idToken]);
+  }, [idToken, user?.uid]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchWalletAndLedger();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [fetchWalletAndLedger]);
 
   const handleRefresh = async () => {
