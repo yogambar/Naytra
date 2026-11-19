@@ -21,8 +21,11 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency to yield an async database session."""
-    session_factory = request.app.state.session_factory
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession | None, None]:
+    """FastAPI dependency to yield an async database session if available."""
+    session_factory = getattr(request.app.state, "session_factory", None)
+    if session_factory is None:
+        yield None
+        return
     async with session_factory() as session:
         yield session

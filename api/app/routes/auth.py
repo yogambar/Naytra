@@ -48,13 +48,23 @@ def get_token_from_header(authorization: Annotated[str | None, Header()] = None)
 
 async def get_current_user(
     token: Annotated[str, Depends(get_token_from_header)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession | None, Depends(get_db)],
 ) -> AppUser:
-    """Verify Firebase ID token and return or synchronize local AppUser record."""
+    """Verify Firebase ID token and return or synchronize user record."""
     decoded = verify_firebase_token(token)
     uid = decoded["uid"]
     email = decoded.get("email", "").lower()
     email_verified = decoded.get("email_verified", False)
+
+    if db is None:
+        return AppUser(
+            id=uid,
+            email=email or f"{uid}@placeholder.naytra.local",
+            name=decoded.get("name"),
+            profile_complete=True,
+            email_verified=email_verified,
+            terms_accepted=True,
+        )
 
     # Lookup user in DB
     result = await db.execute(select(AppUser).where(AppUser.id == uid))
@@ -134,7 +144,7 @@ async def claim_bonus(
 async def complete_profile(
     payload: CompleteProfileRequest,
     user: Annotated[AppUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession | None, Depends(get_db)],
 ) -> SuccessResponse:
     """Complete profile registration: age check (18+), details, and terms acceptance."""
     if not payload.terms_accepted:
@@ -178,8 +188,9 @@ async def complete_profile(
     user.terms_accepted = True
     user.profile_complete = True
 
-    await db.commit()
-    await db.refresh(user)
+    if db is not None:
+        await db.commit()
+        await db.refresh(user)
     logger.info("Profile completed for user %s (age %d)", user.id, age)
 
     return SuccessResponse(data=user_to_profile_data(user))

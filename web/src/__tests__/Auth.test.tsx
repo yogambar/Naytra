@@ -152,4 +152,27 @@ describe('Authentication Utilities & Validation', () => {
       expect(matches.length).toBeLessThanOrEqual(3);
     });
   });
+
+  describe('generateUsername (name + number string made from email)', () => {
+    it('creates username with user name and digits from email', async () => {
+      const { generateUsername } = await import('../utils/userFormatting');
+      const res = generateUsername('Yogambar Singh', 'yogambarsingh2480@gmail.com');
+      expect(res).toBe('yogambar_singh_2480');
+    });
+
+    it('creates deterministic username when email has no digits', async () => {
+      const { generateUsername } = await import('../utils/userFormatting');
+      const res1 = generateUsername('Priya Sharma', 'priya.sharma@example.com');
+      const res2 = generateUsername('Priya Sharma', 'priya.sharma@example.com');
+      expect(res1).toBe(res2);
+      expect(res1.startsWith('priya_sharma_')).toBe(true);
+      expect(/\d{4}/.test(res1)).toBe(true);
+    });
+
+    it('handles fallback when name is null by deriving from email', async () => {
+      const { generateUsername } = await import('../utils/userFormatting');
+      const res = generateUsername(null, 'trader999@example.com');
+      expect(res).toBe('trader999_999');
+    });
+  });
 });

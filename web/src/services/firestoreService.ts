@@ -1,6 +1,7 @@
 /**
  * Firestore Service for Naytra.
- * Stores and manages user profiles, virtual wallets, and immutable double-entry ledger entries.
+ * Stores and manages user profiles, virtual wallets, immutable double-entry ledger entries,
+ * portfolios, orders, and watchlists in Cloud Firestore.
  */
 import {
   doc,
@@ -16,9 +17,11 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { UserProfileData } from '../context/AuthContext';
+import { generateUsername } from '../utils/userFormatting';
 
 export interface WalletDoc {
   user_id: string;
+  username?: string;
   balance_paise: number;
   locked_paise: number;
   total_cash_paise: number;
@@ -37,6 +40,7 @@ export interface LedgerItemDoc {
   id: string;
   tx_id: string;
   user_id?: string;
+  username?: string;
   account_type?: string;
   type: string;
   description: string;
@@ -49,6 +53,41 @@ export interface LedgerItemDoc {
   balance_after_inr?: number;
   ref_id?: string | null;
   created_at: any;
+}
+
+export interface PortfolioDoc {
+  user_id: string;
+  username?: string;
+  holdings: Array<{
+    symbol: string;
+    quantity: number;
+    avg_price_paise: number;
+    invested_paise: number;
+  }>;
+  total_invested_paise: number;
+  current_value_paise: number;
+  realized_pnl_paise: number;
+  unrealized_pnl_paise: number;
+  created_at: any;
+  updated_at: any;
+}
+
+export interface OrderDoc {
+  user_id: string;
+  username?: string;
+  orders_count: number;
+  recent_orders: Array<Record<string, any>>;
+  created_at: any;
+  updated_at: any;
+}
+
+export interface WatchlistDoc {
+  user_id: string;
+  username?: string;
+  name: string;
+  symbols: string[];
+  created_at: any;
+  updated_at: any;
 }
 
 const SIGNUP_BONUS_PAISE = 1000000; // ₹10,000 = 10,00,000 paise
@@ -88,6 +127,7 @@ export async function getFirestoreUserProfile(userId: string): Promise<UserProfi
     const loaded: UserProfileData = {
       id: data.id || userId,
       email: data.email || '',
+      username: data.username || generateUsername(data.name, data.email),
       name: data.name || null,
       dob: data.dob || null,
       phone: data.phone || null,
@@ -110,13 +150,16 @@ export async function getFirestoreUserProfile(userId: string): Promise<UserProfi
 
 /**
  * Initialize or sync user in Firestore.
+ * If user already exists in Firestore:
+ *   - Only retrieves and returns existing user data without recreating.
  * If user does not exist in Firestore:
- *   - Creates users/{userId} with bonus_claimed: false
- *   - Creates wallets/{userId} with ₹10,000 (10,00,000 paise)
- *   - Creates wallets/{userId}/ledger/{tx_signup}
+ *   - Creates users/{userId} with username = name + random number string (made using email)
+ *   - Initializes wallets/{userId} with ₹10,000 virtual cash
+ *   - Initializes wallets/{userId}/ledger/{tx_signup_${userId}}
+ *   - Initializes portfolios/{userId}
+ *   - Initializes orders/{userId}
+ *   - Initializes watchlists/{userId}
  *   - Returns { profile, isNewUser: true }
- * If user already exists:
- *   - Returns { profile, isNewUser: false }
  */
 export async function syncOrInitFirestoreUser(
   user: { uid: string; email?: string | null; displayName?: string | null; emailVerified?: boolean },
@@ -124,10 +167,14 @@ export async function syncOrInitFirestoreUser(
 ): Promise<{ profile: UserProfileData; isNewUser: boolean }> {
   const userId = user.uid;
   const userDocRef = doc(db, 'users', userId);
+  const email = (user.email || '').toLowerCase().trim();
+  const displayName = additional?.name?.trim() || user.displayName || null;
+  const username = generateUsername(displayName, email);
 
   try {
     const snap = await getDoc(userDocRef);
 
+    // ── 1. USER ALREADY EXISTS: ONLY RETRIEVE DATA ───────────────────────
     if (snap.exists()) {
       const data = snap.data();
       const updates: Record<string, any> = {};
@@ -135,6 +182,10 @@ export async function syncOrInitFirestoreUser(
       if (user.emailVerified && !data.email_verified) {
         updates.email_verified = true;
         data.email_verified = true;
+      }
+      if (!data.username) {
+        updates.username = username;
+        data.username = username;
       }
       if (additional?.name && !data.name) {
         updates.name = additional.name.trim();
@@ -173,8 +224,9 @@ export async function syncOrInitFirestoreUser(
 
       const existingProfile: UserProfileData = {
         id: data.id || userId,
-        email: data.email || user.email || '',
-        name: data.name || user.displayName || null,
+        email: data.email || email,
+        username: data.username || username,
+        name: data.name || displayName,
         dob: data.dob || null,
         phone: data.phone || null,
         city: data.city || null,
@@ -195,32 +247,34 @@ export async function syncOrInitFirestoreUser(
       };
     }
 
-    // ── NEW USER INITIALIZATION ──────────────────────────────────────────
+    // ── 2. NEW USER: INITIALIZE ALL COLLECTIONS IN FIRESTORE ──────────────
     const now = Timestamp.now();
     const isProfileComplete = Boolean(additional?.dob && additional?.terms_accepted);
 
+    // Collection 1: users/{userId}
     const newUserDoc = {
       id: userId,
-      email: (user.email || '').toLowerCase(),
-      name: additional?.name?.trim() || user.displayName || null,
+      uid: userId,
+      username,
+      email,
+      name: displayName,
       dob: additional?.dob || null,
       phone: additional?.phone?.trim() || null,
       city: additional?.city?.trim() || null,
       profile_complete: isProfileComplete,
       email_verified: Boolean(user.emailVerified),
       terms_accepted: Boolean(additional?.terms_accepted),
-      bonus_claimed: false, // STRICTLY FALSE FOR BRAND NEW USERS
+      bonus_claimed: false, // strictly false for brand new users
       created_at: now,
       updated_at: now,
     };
-
-    // 1. Create User Document
     await setDoc(userDocRef, newUserDoc);
 
-    // 2. Create Virtual Wallet Document
+    // Collection 2: wallets/{userId}
     const walletDocRef = doc(db, 'wallets', userId);
     await setDoc(walletDocRef, {
       user_id: userId,
+      username,
       balance_paise: SIGNUP_BONUS_PAISE,
       locked_paise: 0,
       total_cash_paise: SIGNUP_BONUS_PAISE,
@@ -235,12 +289,13 @@ export async function syncOrInitFirestoreUser(
       updated_at: now,
     });
 
-    // 3. Create First Immutable Ledger Entry
+    // Collection 3: wallets/{userId}/ledger/{tx_signup_${userId}}
     const ledgerDocRef = doc(db, 'wallets', userId, 'ledger', `tx_signup_${userId}`);
     await setDoc(ledgerDocRef, {
       id: `tx_signup_${userId}`,
       tx_id: `tx_${Date.now()}_signup`,
       user_id: userId,
+      username,
       account_type: 'USER_CASH',
       type: 'SIGNUP_BONUS',
       description: 'Signup practice bonus grant',
@@ -254,9 +309,46 @@ export async function syncOrInitFirestoreUser(
       created_at: now,
     });
 
+    // Collection 4: portfolios/{userId}
+    const portfolioDocRef = doc(db, 'portfolios', userId);
+    await setDoc(portfolioDocRef, {
+      user_id: userId,
+      username,
+      holdings: [],
+      total_invested_paise: 0,
+      current_value_paise: 0,
+      realized_pnl_paise: 0,
+      unrealized_pnl_paise: 0,
+      created_at: now,
+      updated_at: now,
+    });
+
+    // Collection 5: orders/{userId}
+    const orderDocRef = doc(db, 'orders', userId);
+    await setDoc(orderDocRef, {
+      user_id: userId,
+      username,
+      orders_count: 0,
+      recent_orders: [],
+      created_at: now,
+      updated_at: now,
+    });
+
+    // Collection 6: watchlists/{userId}
+    const watchlistDocRef = doc(db, 'watchlists', userId);
+    await setDoc(watchlistDocRef, {
+      user_id: userId,
+      username,
+      name: 'BSE Sensex 30 Top Movers',
+      symbols: ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'ITC'],
+      created_at: now,
+      updated_at: now,
+    });
+
     const newProfile: UserProfileData = {
       id: userId,
       email: newUserDoc.email,
+      username: newUserDoc.username,
       name: newUserDoc.name,
       dob: newUserDoc.dob,
       phone: newUserDoc.phone,
@@ -267,18 +359,20 @@ export async function syncOrInitFirestoreUser(
       bonus_claimed: false,
       created_at: now.toDate().toISOString(),
     };
-    // Persist to localStorage so refreshProfile() always finds it
+
     if (typeof window !== 'undefined') {
       localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(newProfile));
     }
+
     return { profile: newProfile, isNewUser: true };
   } catch (err) {
     console.error('Firestore user init error:', err);
-    // Return local fallback so user is not blocked if rules not yet published
+    // Return fallback profile so user is not blocked if rules not yet published in console
     const fallbackProfile: UserProfileData = {
       id: userId,
-      email: user.email || '',
-      name: additional?.name || user.displayName || null,
+      email,
+      username,
+      name: displayName,
       dob: additional?.dob || null,
       phone: additional?.phone || null,
       city: additional?.city || null,
@@ -288,10 +382,11 @@ export async function syncOrInitFirestoreUser(
       bonus_claimed: false,
       created_at: new Date().toISOString(),
     };
-    // Persist fallback to localStorage so refreshProfile() finds it later
+
     if (typeof window !== 'undefined') {
       localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(fallbackProfile));
     }
+
     return {
       profile: fallbackProfile,
       isNewUser: true,
@@ -331,7 +426,7 @@ export async function claimFirestoreBonus(userId: string): Promise<void> {
 
 /**
  * Complete profile details in Firestore and local cache.
- * Never throws permission errors — gracefully saves to cache and syncs to Firestore.
+ * Initializes all required user collections if not yet present.
  */
 export async function completeFirestoreUserProfile(
   userId: string,
@@ -345,11 +440,13 @@ export async function completeFirestoreUserProfile(
 ): Promise<UserProfileData> {
   const nowISO = new Date().toISOString();
   const currentUser = auth.currentUser;
-  const email = (currentUser?.email || '').toLowerCase();
+  const email = (currentUser?.email || '').toLowerCase().trim();
+  const username = generateUsername(data.name, email);
 
   const profileData: UserProfileData = {
     id: userId,
     email,
+    username,
     name: data.name.trim(),
     dob: data.dob,
     phone: data.phone?.trim() || null,
@@ -366,14 +463,18 @@ export async function completeFirestoreUserProfile(
     localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(profileData));
   }
 
-  // 2. Try writing to Firestore with merge: true
+  // 2. Write to Firestore across all user collections with merge: true
   try {
-    const userDocRef = doc(db, 'users', userId);
     const now = Timestamp.now();
+
+    // 1) users/{userId}
+    const userDocRef = doc(db, 'users', userId);
     await setDoc(
       userDocRef,
       {
         id: userId,
+        uid: userId,
+        username,
         email,
         name: data.name.trim(),
         dob: data.dob,
@@ -382,18 +483,18 @@ export async function completeFirestoreUserProfile(
         terms_accepted: true,
         profile_complete: true,
         email_verified: Boolean(currentUser?.emailVerified),
-        bonus_claimed: false,
         updated_at: now,
       },
       { merge: true }
     );
 
-    // Also seed wallet if needed
+    // 2) wallets/{userId}
     const walletDocRef = doc(db, 'wallets', userId);
     await setDoc(
       walletDocRef,
       {
         user_id: userId,
+        username,
         balance_paise: SIGNUP_BONUS_PAISE,
         locked_paise: 0,
         total_cash_paise: SIGNUP_BONUS_PAISE,
@@ -404,6 +505,78 @@ export async function completeFirestoreUserProfile(
         initial_grant_inr: SIGNUP_BONUS_PAISE / 100,
         currency: 'INR',
         is_virtual: true,
+        created_at: now,
+        updated_at: now,
+      },
+      { merge: true }
+    );
+
+    // 3) wallets/{userId}/ledger/{tx_signup_${userId}}
+    const ledgerDocRef = doc(db, 'wallets', userId, 'ledger', `tx_signup_${userId}`);
+    await setDoc(
+      ledgerDocRef,
+      {
+        id: `tx_signup_${userId}`,
+        tx_id: `tx_${Date.now()}_signup`,
+        user_id: userId,
+        username,
+        account_type: 'USER_CASH',
+        type: 'SIGNUP_BONUS',
+        description: 'Signup practice bonus grant',
+        debit_paise: 0,
+        credit_paise: SIGNUP_BONUS_PAISE,
+        amount_paise: SIGNUP_BONUS_PAISE,
+        amount_inr: SIGNUP_BONUS_PAISE / 100,
+        balance_after_paise: SIGNUP_BONUS_PAISE,
+        balance_after_inr: SIGNUP_BONUS_PAISE / 100,
+        is_credit: true,
+        created_at: now,
+      },
+      { merge: true }
+    );
+
+    // 4) portfolios/{userId}
+    const portfolioDocRef = doc(db, 'portfolios', userId);
+    await setDoc(
+      portfolioDocRef,
+      {
+        user_id: userId,
+        username,
+        holdings: [],
+        total_invested_paise: 0,
+        current_value_paise: 0,
+        realized_pnl_paise: 0,
+        unrealized_pnl_paise: 0,
+        created_at: now,
+        updated_at: now,
+      },
+      { merge: true }
+    );
+
+    // 5) orders/{userId}
+    const orderDocRef = doc(db, 'orders', userId);
+    await setDoc(
+      orderDocRef,
+      {
+        user_id: userId,
+        username,
+        orders_count: 0,
+        recent_orders: [],
+        created_at: now,
+        updated_at: now,
+      },
+      { merge: true }
+    );
+
+    // 6) watchlists/{userId}
+    const watchlistDocRef = doc(db, 'watchlists', userId);
+    await setDoc(
+      watchlistDocRef,
+      {
+        user_id: userId,
+        username,
+        name: 'BSE Sensex 30 Top Movers',
+        symbols: ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'ITC'],
         created_at: now,
         updated_at: now,
       },
@@ -445,6 +618,7 @@ export async function getFirestoreLedger(userId: string): Promise<LedgerItemDoc[
         id: data.id || d.id,
         tx_id: data.tx_id || '',
         user_id: data.user_id,
+        username: data.username,
         account_type: data.account_type,
         type: data.type || 'UNKNOWN',
         description: data.description || '',
@@ -467,8 +641,8 @@ export async function getFirestoreLedger(userId: string): Promise<LedgerItemDoc[
 
 /**
  * Complete account deletion.
- * Deletes user's ledger entries, wallet, and user document from Firestore,
- * then deletes the user from Firebase Authentication.
+ * Deletes user's ledger entries, wallet, portfolio, orders, watchlists,
+ * and user document from Firestore, then deletes from Firebase Auth.
  */
 export async function deleteFirestoreUserAccount(userId: string): Promise<void> {
   try {
@@ -486,15 +660,24 @@ export async function deleteFirestoreUserAccount(userId: string): Promise<void> 
     // 2. Delete wallet document (best-effort)
     await deleteDoc(doc(db, 'wallets', userId)).catch(() => null);
 
-    // 3. Delete user document (best-effort)
+    // 3. Delete portfolio document (best-effort)
+    await deleteDoc(doc(db, 'portfolios', userId)).catch(() => null);
+
+    // 4. Delete orders document (best-effort)
+    await deleteDoc(doc(db, 'orders', userId)).catch(() => null);
+
+    // 5. Delete watchlist document (best-effort)
+    await deleteDoc(doc(db, 'watchlists', userId)).catch(() => null);
+
+    // 6. Delete user document (best-effort)
     await deleteDoc(doc(db, 'users', userId)).catch(() => null);
 
-    // 4. Clear local cache
+    // 7. Clear local cache
     if (typeof window !== 'undefined') {
       localStorage.removeItem(`naytra_profile_${userId}`);
     }
 
-    // 5. Delete Firebase Auth user
+    // 8. Delete Firebase Auth user
     if (auth.currentUser && auth.currentUser.uid === userId) {
       await auth.currentUser.delete();
     }

@@ -31,23 +31,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = time.time()
 
     # ── Engine + session factory ────────────────────────────────────────
-    engine = build_engine(settings.DATABASE_URL, echo=False)
-    # Check if primary database is reachable; if not in DEBUG mode, fallback to SQLite
     try:
+        engine = build_engine(settings.DATABASE_URL, echo=False)
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
+        app.state.engine = engine
+        app.state.session_factory = build_session_factory(engine)
     except Exception as exc:
         if settings.DEBUG:
-            logger.warning("Primary database %s unavailable in debug mode: %s. Using in-memory fallback.", settings.DATABASE_URL, exc)
-            await engine.dispose()
-            engine = build_engine("sqlite+aiosqlite:///:memory:", echo=False)
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Primary database %s offline (%s). Using Firestore-first mode.", settings.DATABASE_URL, exc)
+            app.state.engine = None
+            app.state.session_factory = None
         else:
             raise
-
-    app.state.engine = engine
-    app.state.session_factory = build_session_factory(engine)
 
     # ── Redis ───────────────────────────────────────────────────────────
     app.state.redis = aioredis.from_url(
@@ -58,7 +54,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # ── Teardown ────────────────────────────────────────────────────────
     await app.state.redis.aclose()
-    await engine.dispose()
+    if getattr(app.state, "engine", None):
+        await app.state.engine.dispose()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

@@ -16,11 +16,13 @@ import {
   completeFirestoreUserProfile,
   deleteFirestoreUserAccount,
 } from '../services/firestoreService';
+import { generateUsername } from '../utils/userFormatting';
 import { hapticSuccess, hapticError } from '../utils/haptics';
 
 export interface UserProfileData {
   id: string;
   email: string;
+  username?: string | null;
   name: string | null;
   dob: string | null;
   phone: string | null;
@@ -265,6 +267,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const seedProfile: UserProfileData = {
           id: cred.user.uid,
           email: email.trim().toLowerCase(),
+          username: generateUsername(name, email),
           name: name.trim(),
           dob,
           phone: phone?.trim() || null,
