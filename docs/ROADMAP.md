@@ -2,188 +2,69 @@
 
 ---
 
-## Milestone Overview
+## 1. Updated Execution Pipeline
+
+Following the architectural directive, development is strictly ordered into:
+1. **Engine Layer**: Standalone Backend Server (Charts, Market/News Ingestion, ML Candle Predictor + LLM Reasoning).
+2. **Operations & Observability**: High Availability, Auto-Restart, Monitoring, and the Backend Engineer Ops Console.
+3. **Abstraction & Optimization**: Redis caching, load balancing, rate limiting, and client abstraction.
+4. **Main App Features**: Complete Holdings, Profile, Learn, Wallet, and Dashboard with purple forecast candles.
 
 ```mermaid
-flowchart LR
-    M0["M0\nFoundation ✅"] --> M1["M1\nAuthentication"]
-    M1 --> M2["M2\nVirtual Wallet"]
-    M2 --> M3["M3\nMarket Data"]
-    M3 --> M4["M4\nDashboard"]
-    M4 --> M5["M5\nPaper Trading"]
-    M5 --> M6["M6\nHardening"]
-    M6 --> M7["M7\nRelease"]
-    M7 -.-> M8["M8\nPhase 2\n(ML/LLM)"]
+flowchart TD
+    subgraph Step 1 ["Step 1: Standalone Prediction Backend Engine"]
+        S1A["Market & News Ingestion Worker"] --> S1B["Chart Store & Candle Manager"]
+        S1B --> S1C["ML Candle Predictor (Purple Candles)"]
+        S1C --> S1D["LLM Market Reasoning Engine"]
+    end
+
+    subgraph Step 2 ["Step 2: Reliability & Backend Engineer Console"]
+        S2A["Always-On Daemon (Auto-restart, Backups)"] --> S2B["Health Probes & Metrics (Model, LLM, API Keys)"]
+        S2B --> S2C["Backend Engineer Ops Console UI"]
+    end
+
+    subgraph Step 3 ["Step 3: Abstraction & Caching"]
+        S3A["Strictly Abstracted API Endpoints"] --> S3B["Redis Layer & Client Stale-While-Revalidate"]
+    end
+
+    subgraph Step 4 ["Step 4: Main Naytra App Completion"]
+        S4A["Holdings & Paper Trading"]
+        S4B["Dashboard with Purple Forecasts"]
+        S4C["Wallet & Double-Entry Ledger"]
+        S4D["Profile, Settings & Learn Hub"]
+    end
+
+    Step 1 --> Step 2
+    Step 2 --> Step 3
+    Step 3 --> Step 4
 ```
 
 ---
 
-## M0: Foundation ✅
+## 2. Updated Modules Matrix
 
-> **Status: Complete**
-
-| Deliverable | Status |
-| --- | --- |
-| React SPA scaffolding (Vite + TypeScript) | ✅ |
-| FastAPI project scaffolding | ✅ |
-| Docker Compose for PostgreSQL + Redis | ✅ |
-| Health, readiness, and meta endpoints | ✅ |
-| Project documentation suite | ✅ |
-| Brand reference and design tokens defined | ✅ |
-| Directory structure established | ✅ |
-
----
-
-## M1: Authentication
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Firebase Auth integration (web) | Email/password + Google sign-in |
-| Sign-up page | Form with validation, brand styling |
-| Sign-in page | Form with validation, brand styling |
-| Auth context / provider (React) | `useAuth()` hook, protected routes |
-| API auth middleware | Verify Firebase ID tokens server-side |
-| User record in PostgreSQL | Sync Firebase UID → local user table on first login |
-| Logout flow | Clear tokens, redirect to sign-in |
-
-**Dependencies:** Firebase project configured (`naytra-53238`), `google-services.json` for Android.
+| Module ID | Module Name | Scope & Technical Implementation | Execution Order |
+|---|---|---|---|
+| **MOD-01** | **Standalone Chart & Ingestion Engine** | Periodic worker polling live/replay BSE Sensex 30 market feeds, financial RSS, and news sources. Stores raw ticks, computes time-bucketed OHLCV candles (1m, 5m, 15m, 1D), and caches historical charts. | **Step 1 (First)** |
+| **MOD-02** | **ML Candle Predictor (Purple Candles)** | Trained time-series forecasting model (ARIMA / LSTM / Transformer hybrid) that projects the remaining candles for today's trading session. Actual candles rendered in Green/Red; predicted future candles tagged as **Purple (`#8A2BE2`)**. Purple candles automatically replaced in real-time as actual market ticks arrive. | **Step 1** |
+| **MOD-03** | **LLM Market Reasoning Engine** | Multimodal/LLM synthesis service (Gemini API) that ingests live sentiment, technical indicators (RSI, MACD, Volume), and predicted trajectories to output concise, human-understandable market rationales and confidence ratings. | **Step 1** |
+| **MOD-04** | **Backend Daemon & Self-Healing Supervisor** | Process manager configuration (supervisord / systemd / background watcher) ensuring the backend engine stays permanently alive with auto-restart on exit, memory guards, rotating loggers, and automated database backups. | **Step 2** |
+| **MOD-05** | **Backend Engineer Ops & Health Console** | Dedicated web dashboard for backend engineers showing: live candle charts with purple forecasts, LLM reasoning feed, live ML model health & inference latency, LLM quota/tokens, API key status, Redis hit rates, and system memory/CPU. | **Step 2** |
+| **MOD-06** | **Abstracted API & Cache-Control Gateway** | High-performance FastAPI routing gateway. Client app has zero visibility into internal ML/LLM models or pipelines. Enforces Redis caching headers (`Cache-Control: public, max-age=...`, ETag, stale-while-revalidate) to protect the backend from client overloading. | **Step 3** |
+| **MOD-07** | **Interactive Chart Integration in Main App** | Upgrading main web app chart view to render actual Green/Red candles alongside Purple forecast candles with timeline cursor, interval selectors, and LLM reasoning drawer. | **Step 4** |
+| **MOD-08** | **Holdings & Portfolio Manager (`/holdings`)** | Real-time position tracking: average buy price, current valuation, unrealized/realized P&L, sector weights, and instant liquidation actions. | **Step 4** |
+| **MOD-09** | **Paper Trading & Order Execution Engine (`/orders`)** | Market and limit order ticket with simulated execution, slippage simulation, regulatory fee computation (STT, exchange fees in integer paise), and double-entry ledger balancing. | **Step 4** |
+| **MOD-10** | **Dashboard & Activity Hub (`/dashboard`)** | Aggregated view: Net worth tracker, Sensex top gainers/losers ticker, purple prediction preview, and quick-trade actions. | **Step 4** |
+| **MOD-11** | **User Profile, Security & Account Management (`/profile`)** | User username (`name + email number string`), mobile/city editing, notification preferences, Capacitor native settings, and GDPR account deletion. | **Step 4** |
+| **MOD-12** | **Educational Learning Hub (`/learn`)** | Interactive trading modules, candlestick pattern guides, simulated trading tutorials, and risk disclosure checks. | **Step 4** |
 
 ---
 
-## M2: Virtual Wallet and Signup Bonus
+## 3. Milestones Status Tracking
 
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Wallet table (PostgreSQL) | `user_id`, `balance_paise`, `created_at`, `updated_at` |
-| Double-entry ledger table | `id`, `user_id`, `type`, `debit_paise`, `credit_paise`, `ref_id`, `created_at` |
-| Signup bonus credit | Automatically credit virtual funds on first login |
-| Wallet balance API | `GET /api/v1/wallet` |
-| Ledger history API | `GET /api/v1/wallet/ledger` with pagination |
-| Wallet UI | Balance display, transaction history list |
-
-**Depends on:** M1 (authentication), Q4 decision (bonus amount).
-
-**Key decision:** Integer paise for all monetary values. See `ARCHITECTURE.md` §4.1.
-
----
-
-## M3: Market Data, Replay Engine, Chart Kit
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Stock universe table | Sensex 30 stocks with metadata |
-| DATA_MODE implementation | `REPLAY` / `DEMO` / `LIVE` modes |
-| Synthetic data generator | Random-walk price generator for `DEMO` mode |
-| Replay engine | Plays back historical data at configurable speed |
-| Price streaming | SSE or polling endpoint for live ticks |
-| Chart component | Candlestick and line charts (lightweight-charts or similar) |
-| Stock list page | Browse all 30 stocks with current prices |
-
-**Depends on:** Q2 (data source), Q6 (stock list), Q7 (licensing).
-
----
-
-## M4: Dashboard
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Dashboard page | Aggregated view of wallet, portfolio, market |
-| Portfolio summary widget | Total value, P&L, allocation pie chart |
-| Market overview widget | Sensex index, top gainers/losers |
-| Recent activity widget | Last N trades and ledger entries |
-| Responsive layout | Mobile-first, adapts to tablet/desktop |
-
-**Depends on:** M2 (wallet), M3 (market data).
-
----
-
-## M5: Stock Page and Paper Trading
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Stock detail page | Price chart, company info, order form |
-| Order placement | Buy/sell with quantity, market/limit orders |
-| Order validation | Sufficient funds check, market hours check |
-| Order execution engine | Simulated fill at market price (or limit trigger) |
-| Portfolio table | Current holdings with cost basis and P&L |
-| Brokerage deduction | Simulated trading costs (see Q8) |
-| Trade history | List of all executed trades |
-
-**Depends on:** M3 (market data), M2 (wallet), Q8 (brokerage model).
-
----
-
-## M6: Security, Accessibility, and Performance Hardening
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Security headers audit | Verify all headers from `SECURITY.md` |
-| CSP tightening | Remove any `unsafe-inline` if possible |
-| WCAG AA audit | axe-core, keyboard nav, screen reader testing |
-| Reduced motion support | `prefers-reduced-motion` media query |
-| Performance budget enforcement | Lighthouse CI, bundle analysis |
-| Error boundaries | Graceful error handling in React |
-| Rate limiting activation | Redis-backed sliding window |
-| Input validation hardening | Fuzz testing on API inputs |
-
----
-
-## M7: Release Preparation
-
-> **Status: Not started**
-
-| Deliverable | Details |
-| --- | --- |
-| Production deployment | API host (Q1/Q3), Firebase Hosting for web |
-| CI/CD pipeline | GitHub Actions for build, test, deploy |
-| Android build | Capacitor production build, signed APK |
-| Play Store listing | If publishing (requires Q5 legal docs + \$25 fee) |
-| Privacy Policy + Terms | Requires legal review (Q5) |
-| Monitoring + alerting | Error tracking (Sentry or similar) |
-| Documentation final review | All docs up to date |
-| User acceptance testing | End-to-end walkthrough |
-
-**Depends on:** Q1, Q3, Q5, Q7 decisions.
-
----
-
-## M8: Phase 2 — ML / LLM (Future)
-
-> **Status: Not started — requires owner decision**
-
-This milestone is speculative and will not begin until Phase 1 (M0–M7) is complete and the owner decides to proceed.
-
-| Idea | Description |
-| --- | --- |
-| AI market commentary | LLM-generated explanations of price movements |
-| Trading assistant | Conversational interface for learning trading concepts |
-| Pattern recognition | ML-based chart pattern detection (educational) |
-| Sentiment analysis | News sentiment scoring for Sensex 30 stocks |
-| Portfolio advisor | AI-suggested diversification strategies (educational, not financial advice) |
-
-**Important:** Any ML/LLM features must include clear disclaimers that they are educational tools, not investment advice.
-
----
-
-## Timeline Notes
-
-- No calendar dates are assigned — milestones are completed sequentially.
-- Each milestone should be fully functional and tested before moving to the next.
-- Open questions (see `OPEN_QUESTIONS.md`) may block specific milestones.
-- The owner may re-prioritize milestones at any time.
-
----
-
-*Last updated: 2026-11-14*
+- **M0: Foundation** — ✅ Completed (React 18 SPA + FastAPI base)
+- **M1: Authentication & User Lifecycle** — ✅ Completed (Firebase Auth + Indian Phone + Trie City + Firestore Initialization + User Tag)
+- **M2: Virtual Wallet & Ledger** — ✅ Completed (₹10,000 Signup Bonus + 3D Animation + Double-Entry Ledger)
+- **M3: Standalone Forecasting Backend & Ops Console** — 🟡 **In Progress (Active Focus)**
+- **M4: Main App Feature Completion & Screen Rollout** — ⚪ Queued (Executes after M3)
+- **M5: Native Packaging & Release** — ⚪ Queued

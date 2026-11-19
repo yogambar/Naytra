@@ -1,22 +1,25 @@
 # Architecture — Naytra
 
-> Educational paper-trading app for BSE Sensex 30
+> Educational paper-trading platform for BSE Sensex 30 with ML Candle Forecasting & LLM Reasoning
 
 ---
 
 ## 1. System Overview
 
-Naytra is a single-page web application backed by a Python API server. It teaches stock-market concepts through simulated trading on the BSE Sensex 30 universe — no real money is involved.
+Naytra is built as an abstracted two-tier ecosystem:
+1. **Predictive Market Server (Backend-Only Engine)**: Ingests market data and sentiment feeds, runs ML candle forecasting and LLM reasoning models, maintains chart stores, and exposes an abstracted high-performance API.
+2. **Client Layer (Main Naytra App)**: Consumes the abstracted market, wallet, and prediction data with local and edge caching, providing a zero-risk educational trading experience for BSE Sensex 30 stocks.
 
 | Layer | Technology | Role |
 | --- | --- | --- |
-| **Frontend** | React 18 SPA (Vite) | UI, charts, paper-trading interactions |
-| **Backend** | FastAPI (Python 3.11+) | Business logic, REST API, replay engine |
-| **Database** | PostgreSQL 16 | Persistent storage — users, ledger, orders |
-| **Cache / Pub-Sub** | Redis 7 | Session cache, rate limiting, replay ticker |
-| **Identity** | Firebase Auth | Email/password + Google sign-in |
-| **Hosting (web)** | Firebase Hosting | Static SPA delivery |
-| **Mobile shell** | Capacitor (Android) | Thin native wrapper around the SPA |
+| **Client App** | React 18 SPA (Vite, TypeScript, Tailwind) | Educational simulator UI, charts, paper-trading, client cache |
+| **Backend Engine** | FastAPI (Python 3.11+ / Uvicorn) | Business logic, market ingestion, ML inference, LLM reasoning |
+| **Ops Console** | Lightweight React / HTML5 Admin View | Real-time monitoring of models, LLM latency, API keys, and charts |
+| **Forecasting Engine** | ML Time Series Model + Gemini LLM | Projects remaining purple candles for today + explains market rationale |
+| **Cache & Pub/Sub** | Redis 7 | Live tickers, quote caching, sliding-window rate limiting |
+| **Database** | Cloud Firestore + PostgreSQL/Timescale | User profiles, wallets, immutable double-entry ledger, historical OHLCV |
+| **Identity** | Firebase Auth | Native Google OAuth + verified email/password |
+| **Mobile Shell** | Capacitor 8 | Native Android wrapper around the client SPA |
 
 ---
 
@@ -24,178 +27,71 @@ Naytra is a single-page web application backed by a Python API server. It teache
 
 ```mermaid
 flowchart TB
-    subgraph Client
-        B["Browser / SPA\n(React + Vite)"]
-        A["Android\n(Capacitor shell)"]
+    subgraph MarketSources ["External Sources"]
+        MKT["Market Feeds (Sensex 30)"]
+        NEWS["Financial News / RSS"]
     end
 
-    subgraph Firebase
-        FA["Firebase Auth"]
-        FH["Firebase Hosting"]
+    subgraph BackendEngine ["Predictive Backend Server (Always-On Daemon)"]
+        INGEST["Ingestion & Sentiment Worker"]
+        CHART_STORE["Chart & OHLCV Store"]
+        ML_MODEL["ML Candle Predictor\n(Purple Candles)"]
+        LLM_AGENT["LLM Reasoning Engine\n(Market Causal Analysis)"]
+        CACHE["Redis L2 Cache\n(Tickers, Forecasts, Rate-Limiting)"]
+        API_GATEWAY["Abstracted FastAPI Gateway\n(/api/v1/)"]
+        OPS_UI["Backend Engineer Ops Console\n(Live Model/LLM Health, API Status)"]
     end
 
-    subgraph Backend
-        API["FastAPI\n/api/v1/"]
-        RE["Replay Engine"]
+    subgraph ClientLayer ["Client Layer (Abstracted)"]
+        WEB_APP["Naytra Web SPA\n(Client-side L1 Cache)"]
+        ANDROID_APP["Capacitor Android Shell"]
     end
 
-    subgraph Data
-        PG[("PostgreSQL")]
-        RD[("Redis")]
-    end
-
-    B -- "static assets" --> FH
-    A -- "WebView" --> FH
-    B -- "ID token" --> FA
-    A -- "ID token" --> FA
-    B -- "REST + Bearer token" --> API
-    A -- "REST + Bearer token" --> API
-    FA -. "verify token" .-> API
-    API --> PG
-    API --> RD
-    RE -- "tick data" --> RD
-    RE -- "snapshots" --> PG
+    MKT --> INGEST
+    NEWS --> INGEST
+    INGEST --> CHART_STORE
+    CHART_STORE --> ML_MODEL
+    INGEST --> LLM_AGENT
+    ML_MODEL --> LLM_AGENT
+    ML_MODEL --> CACHE
+    LLM_AGENT --> CACHE
+    CHART_STORE --> CACHE
+    CACHE --> API_GATEWAY
+    API_GATEWAY --> OPS_UI
+    API_GATEWAY -- "JSON + Cache Headers" --> WEB_APP
+    API_GATEWAY -- "JSON + Cache Headers" --> ANDROID_APP
 ```
 
 ---
 
-## 3. Data Flow
+## 3. Data & Prediction Lifecycle
 
-### 3.1 Request Lifecycle
+### 3.1 Candlestick Color Convention
+- **Actual Historical & Real-Time Candles**:
+  - Green: Bullish ($Close \ge Open$)
+  - Red: Bearish ($Close < Open$)
+- **Forecast Candles (Rest of Today)**:
+  - **Purple (`#8A2BE2`)**: Predicted future candles projected by the ML model for the remainder of today's market session.
+  - **Dynamic Replacement**: As time advances and new real market data arrives, each purple candle is replaced by the real green or red candle.
 
-1. User interacts with the React SPA in the browser (or Capacitor WebView).
-2. The SPA obtains a Firebase ID token from Firebase Auth.
-3. Each API call includes the token as `Authorization: Bearer <token>`.
-4. FastAPI middleware verifies the token with Firebase Admin SDK.
-5. The handler executes business logic, reading/writing PostgreSQL and Redis.
-6. A JSON response envelope (`{ ok, data, error }`) is returned to the SPA.
+### 3.2 LLM Reasoning
+- For every forecasted stock, the LLM evaluates the confluence of news sentiment, price momentum, and support/resistance levels.
+- It outputs a structured insight containing: summary rationale, primary catalyst, risk level, and a confidence rating ($0-100\%$).
 
-### 3.2 Replay / Market Data Flow
-
-1. The **Replay Engine** reads historical tick data (source TBD — see `OPEN_QUESTIONS.md` Q2).
-2. Ticks are published to a Redis channel.
-3. The API streams ticks to connected clients via Server-Sent Events or polling.
-4. Snapshots are periodically persisted to PostgreSQL for analytics.
-
----
-
-## 4. Key Architectural Decisions
-
-### 4.1 Integer Paise for Money
-
-All monetary values are stored and transmitted as **integer paise** (1 INR = 100 paise). This eliminates floating-point rounding errors that plague financial calculations.
-
-```
-display_inr = paise / 100
-```
-
-The frontend formats paise into the user-visible `₹ X,XX,XXX.XX` string; the API and database never store rupee floats.
-
-### 4.2 Double-Entry Ledger
-
-Every financial event (signup bonus credit, stock purchase, stock sale, brokerage deduction) produces **two ledger rows** that sum to zero. This guarantees:
-
-- The total system balance is always zero.
-- Every rupee (paisa) is traceable.
-- Auditing is trivial: `SELECT SUM(amount_paise) FROM ledger` must equal `0`.
-
-### 4.3 DATA_MODE
-
-The replay engine operates in one of three modes, controlled by the `DATA_MODE` environment variable:
-
-| Mode | Description | Use case |
-| --- | --- | --- |
-| `REPLAY` | Plays back historical tick data at configurable speed | Default educational mode |
-| `DEMO` | Synthetic random-walk generator, no external data needed | Development / demos |
-| `LIVE` | Reserved for future real-time data (requires licensing) | Phase 2+ |
+### 3.3 Backend Engineer Ops Console
+A standalone dashboard for site reliability and backend engineers to monitor:
+1. **Model Health**: Active model checkpoint, inference latency (ms), prediction drift.
+2. **LLM Health**: Response time, token usage, API quota percentage, error rate.
+3. **API Key Health**: Status of market feed keys, news sources, Gemini keys (Active / Degraded / Rate-limited).
+4. **Cache Health**: Redis hit/miss ratio, memory footprint, active tickers.
+5. **Chart Preview**: Live chart rendering actual (green/red) + purple forecast candles.
 
 ---
 
-## 5. Directory Structure
+## 4. System Design & Abstraction Principles
 
-```
-Naytra/
-├── web/                 # React SPA (Vite)
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   ├── lib/
-│   │   └── styles/
-│   ├── index.html
-│   ├── vite.config.ts
-│   └── package.json
-│
-├── api/                 # FastAPI backend
-│   ├── app/
-│   │   ├── routers/
-│   │   ├── models/
-│   │   ├── services/
-│   │   ├── middleware/
-│   │   └── main.py
-│   ├── tests/
-│   ├── alembic/
-│   ├── requirements.txt
-│   └── pyproject.toml
-│
-├── android/             # Capacitor Android project
-│   └── app/
-│       └── google-services.json   ← git-ignored
-│
-├── docs/                # This documentation
-│   ├── ARCHITECTURE.md
-│   ├── SETUP.md
-│   ├── API.md
-│   ├── SECURITY.md
-│   ├── DESIGN.md
-│   ├── COSTS_AND_SERVICES.md
-│   ├── OPEN_QUESTIONS.md
-│   ├── ROADMAP.md
-│   ├── REQUIREMENTS_DELTA.md
-│   ├── THIRD_PARTY.md
-│   └── UI_QA.md
-│
-├── docker-compose.yml
-├── .env.example
-└── README.md
-```
-
----
-
-## 6. Technology Choices and Rationale
-
-| Choice | Why |
-| --- | --- |
-| **React 18** | Industry-standard UI library; large ecosystem, strong hiring pool, excellent dev tooling. |
-| **Vite** | Fastest DX for React; ESM-native, sub-second HMR. |
-| **Tailwind CSS** | Utility-first CSS avoids class-name proliferation and keeps bundle small with purging. |
-| **TanStack Query** | Declarative server-state management with caching, retries, and stale-while-revalidate — reduces boilerplate vs raw `useEffect`. |
-| **React Router** | De-facto SPA routing; supports code-splitting and lazy routes. |
-| **FastAPI** | Async Python with auto-generated OpenAPI docs; type-safe with Pydantic. |
-| **SQLAlchemy 2.0** | Mature ORM; parameterized queries by default; Alembic migrations. |
-| **PostgreSQL** | ACID-compliant, JSON support, excellent for financial ledger patterns. |
-| **Redis** | Sub-millisecond reads for rate limiting, session cache, and pub-sub tick streaming. |
-| **Firebase Auth** | Free tier covers our scale; handles email/password + Google OAuth without custom auth infrastructure. |
-| **Firebase Hosting** | Free static hosting with global CDN; pairs with Firebase Auth for easy token refresh. |
-| **Capacitor** | Wraps the SPA into a native Android shell without rewriting the UI. |
-| **Bricolage Grotesque / IBM Plex Sans** | OFL-licensed, self-hosted to avoid external network requests and ensure brand consistency. |
-
----
-
-## 7. Cross-Cutting Concerns
-
-| Concern | Approach |
-| --- | --- |
-| **Authentication** | Firebase ID tokens verified server-side on every request |
-| **Authorization** | User-scoped queries; no user can see another user's data |
-| **Validation** | Pydantic models on input; Zod (or similar) on the frontend |
-| **Error handling** | Structured envelope `{ ok, data, error }` with machine-readable error codes |
-| **Logging** | Structured JSON logs (Python `structlog`) |
-| **Testing** | pytest (API), Vitest + React Testing Library (web) |
-| **CI/CD** | GitHub Actions (planned) |
-| **Security headers** | Strict CSP, HSTS, X-Frame-Options — see `SECURITY.md` |
-
----
-
-*Last updated: 2026-11-14*
+1. **Information Hiding**: The main client application has no visibility into internal model weights, raw prompt templates, or ingestion workers. It only requests `/api/v1/market/charts/{symbol}` and receives tagged candle objects (`is_forecast: true/false`).
+2. **Two-Tier Caching**:
+   - **L1 Client Cache**: Client apps cache historical and forecast candles in memory/IndexedDB using `stale-while-revalidate` (SWR) patterns.
+   - **L2 Redis Cache**: The backend serves read requests directly from Redis, preventing database or model re-computation on every client hit.
+3. **Integer Currency Arithmetic**: All cash balances, stock prices, and brokerage fees are handled in **integer paise** ($1\text{ INR} = 100\text{ paise}$).

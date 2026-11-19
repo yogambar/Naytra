@@ -1,0 +1,68 @@
+[project]
+name = "naytra-engine"
+version = "0.1.0"
+description = "Naytra Predictive Backend Engine — Market Ingestion, ML Candle Forecasting & LLM Reasoning"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.30",
+
+    # Data & ML
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "torch>=2.1",
+    "yfinance>=0.2.36",
+    "ta>=0.11",           # Technical analysis indicators
+
+    # Market data APIs
+    "httpx>=0.27",
+    "aiohttp>=3.9",
+
+    # LLM
+    "google-generativeai>=0.8",
+
+    # Cache & Storage
+    "redis>=5.0",
+
+    # Firebase
+    "firebase-admin>=6.5",
+
+    # Config
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+
+    # Scheduling
+    "apscheduler>=3.10",
+
+    # Logging & monitoring
+    "structlog>=24.1",
+    "psutil>=5.9",
+
+    # Serialization
+    "orjson>=3.9",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "fakeredis",
+]
+dev = [
+    "ruff",
+    "mypy",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

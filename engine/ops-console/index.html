@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Naytra — Backend Engineer Ops Console</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              forecast: '#8A2BE2', // Purple forecast color
+              bullish: '#00C805',  // Green actual color
+              bearish: '#FF3B30',  // Red actual color
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+    .glow-purple {
+      box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg">
+          N
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white tracking-wide flex items-center gap-2">
+            NAYTRA ENGINE <span class="text-xs px-2 py-0.5 rounded bg-purple-900/60 text-purple-300 border border-purple-700/50">OPS CONSOLE</span>
+          </h1>
+          <p class="text-xs text-gray-400">BSE Sensex 30 • ML Candle Forecaster • Gemini Reasoning</p>
+        </div>
+      </div>
+
+      <div class="hidden md:flex items-center space-x-2 pl-6 border-l border-gray-800">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800/60 animate-pulse">
+          <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full"></span> SYSTEM ONLINE
+        </span>
+        <span id="uptime-badge" class="text-xs text-gray-400 font-mono">Uptime: 0h 0m</span>
+      </div>
+    </div>
+
+    <!-- Quick Ops Actions -->
+    <div class="flex items-center space-x-3">
+      <button onclick="triggerIngest()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-md border border-gray-700 flex items-center gap-1.5 transition">
+        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Trigger Ingest
+      </button>
+      <button onclick="triggerForecast()" class="text-xs bg-purple-900/50 hover:bg-purple-800/60 text-purple-200 px-3 py-1.5 rounded-md border border-purple-700/50 flex items-center gap-1.5 transition glow-purple">
+        <svg class="w-3.5 h-3.5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Re-Forecast All
+      </button>
+      <button onclick="clearCache()" class="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md border border-gray-700 transition">
+        Flush Cache
+      </button>
+      <a href="/docs" target="_blank" class="text-xs bg-gray-800 hover:bg-gray-700 text-indigo-300 px-3 py-1.5 rounded-md border border-gray-700 transition">
+        Swagger API
+      </a>
+    </div>
+  </header>
+
+  <!-- Metrics Grid -->
+  <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Card 1: ML Model Health -->
+    <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">ML Forecast Model</span>
+        <span id="model-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/50">HEALTHY</span>
+      </div>
+      <div class="text-lg font-bold text-white mb-1" id="model-name">Naytra-LSTM-V1-Hybrid</div>
+      <div class="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-800">
+        <div>Latency: <span class="text-white font-mono" id="model-latency">12.4ms</span></div>
+        <div>Inferences: <span class="text-white font-mono" id="model-inferences">0</span></div>
+        <div>RMSE: <span class="text-white font-mono" id="model-rmse">0.0034</span></div>
+        <div>Checkpoint: <span class="text-purple-400 font-mono" id="model-ckpt">v1.2.4</span></div>
+      </div>
+    </div>
+
+    <!-- Card 2: Gemini LLM Health -->
+    <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">LLM Reasoning Engine</span>
+        <span id="llm-status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/50">ONLINE</span>
+      </div>
+      <div class="text-lg font-bold text-white mb-1" id="llm-model-name">Gemini 2.5 Flash</div>
+      <div class="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-800">
+        <div>Avg Latency: <span class="text-white font-mono" id="llm-latency">450ms</span></div>
+        <div>Success Rate: <span class="text-emerald-400 font-mono" id="llm-success-rate">100%</span></div>
+        <div>Tokens Approx: <span class="text-white font-mono" id="llm-tokens">0</span></div>
+        <div>Errors: <span class="text-white font-mono" id="llm-errors">0</span></div>
+      </div>
+    </div>
+
+    <!-- Card 3: External API Keys -->
+    <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">External API Quotas</span>
+        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-800/50">ACTIVE</span>
+      </div>
+      <div class="space-y-2 text-xs mt-2">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-300 font-medium">Twelve Data (Market)</span>
+          <span class="font-mono text-white" id="twelve-data-credits">800 / 800 left</span>
+        </div>
+        <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+          <div id="twelve-data-bar" class="bg-blue-500 h-full w-full"></div>
+        </div>
+
+        <div class="flex justify-between items-center pt-1">
+          <span class="text-gray-300 font-medium">Marketaux (News)</span>
+          <span class="font-mono text-white" id="marketaux-credits">100 / 100 left</span>
+        </div>
+        <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+          <div id="marketaux-bar" class="bg-emerald-500 h-full w-full"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Cache & System Performance -->
+    <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Cache & System Load</span>
+        <span id="cache-mode-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-400 border border-purple-800/50">REDIS L2</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-2">
+        <div>Cache Hit Rate: <span class="text-emerald-400 font-mono font-bold" id="cache-hit-rate">100%</span></div>
+        <div>Cached Keys: <span class="text-white font-mono" id="cache-keys">0</span></div>
+        <div>Memory (RSS): <span class="text-white font-mono" id="system-memory">-- MB</span></div>
+        <div>CPU Load: <span class="text-white font-mono" id="system-cpu">-- %</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Workstation Layout -->
+  <div class="flex-1 px-6 pb-6 grid grid-cols-12 gap-6 min-h-0">
+
+    <!-- Left Column: BSE Sensex 30 Ticker Selector -->
+    <div class="col-span-12 lg:col-span-3 bg-gray-900/70 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
+      <div class="p-3 border-b border-gray-800 bg-gray-900/90 flex items-center justify-between">
+        <span class="text-xs font-bold uppercase tracking-wider text-gray-300">BSE Sensex 30</span>
+        <input id="ticker-search" type="text" placeholder="Search..." oninput="filterTickers()" class="bg-gray-800 text-xs text-white px-2 py-1 rounded border border-gray-700 w-28 focus:outline-none focus:border-purple-500">
+      </div>
+      <div id="ticker-list" class="flex-1 overflow-y-auto custom-scrollbar divide-y divide-gray-800/50 max-h-[620px]">
+        <!-- Tickers dynamically injected here -->
+        <div class="p-4 text-center text-gray-500 text-xs">Loading market constituents...</div>
+      </div>
+    </div>
+
+    <!-- Center Column: Candlestick Chart (Green/Red Actuals + Purple Forecasts) -->
+    <div class="col-span-12 lg:col-span-6 bg-gray-900/70 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
+      <!-- Chart Controls Header -->
+      <div class="p-3 border-b border-gray-800 bg-gray-900/90 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-3">
+          <span class="text-base font-bold text-white tracking-wide" id="selected-symbol-title">RELIANCE</span>
+          <span class="text-xs text-gray-400" id="selected-company-title">Reliance Industries Ltd.</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700" id="selected-sector-title">Energy</span>
+        </div>
+
+        <!-- Timeframe & Forecast Toggle -->
+        <div class="flex items-center space-x-2">
+          <div class="inline-flex rounded-md shadow-sm">
+            <button onclick="setChartInterval('1m')" class="interval-btn text-xs px-2.5 py-1 rounded-l border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="1m">1m</button>
+            <button onclick="setChartInterval('5m')" class="interval-btn text-xs px-2.5 py-1 border-t border-b border-gray-700 bg-purple-900/60 text-purple-200 font-bold" data-interval="5m">5m</button>
+            <button onclick="setChartInterval('15m')" class="interval-btn text-xs px-2.5 py-1 border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="15m">15m</button>
+            <button onclick="setChartInterval('1D')" class="interval-btn text-xs px-2.5 py-1 rounded-r border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="1D">1D</button>
+          </div>
+
+          <label class="flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2 py-1 rounded border border-purple-800/40">
+            <input type="checkbox" id="toggle-forecast" checked onchange="loadChartData()" class="rounded bg-gray-800 border-gray-700 text-purple-600 focus:ring-0">
+            <span>Purple Forecasts (#8A2BE2)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Chart Canvas Viewport -->
+      <div class="flex-1 p-4 relative min-h-[440px] flex flex-col justify-center bg-gray-950/40">
+        <!-- Interactive HTML5 Canvas Candlestick Chart -->
+        <canvas id="candleCanvas" class="w-full h-full block"></canvas>
+        <div id="chart-tooltip" class="hidden absolute pointer-events-none bg-gray-900/95 border border-purple-500/50 rounded-lg p-2.5 text-xs text-white shadow-2xl z-20 backdrop-blur"></div>
+      </div>
+
+      <!-- Chart Legend & Status Bar -->
+      <div class="p-3 border-t border-gray-800 bg-gray-900/80 flex items-center justify-between text-xs text-gray-400">
+        <div class="flex items-center space-x-4">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#00C805]"></span> Bullish Actual</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#FF3B30]"></span> Bearish Actual</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#8A2BE2] shadow-[0_0_8px_#8A2BE2]"></span> ML Purple Forecast (Rest of Today)</span>
+        </div>
+        <div id="chart-stats" class="font-mono text-gray-400">
+          Actual: <span id="actual-count-stat" class="text-white">--</span> | Forecast: <span id="forecast-count-stat" class="text-purple-400">--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: LLM Reasoning & News -->
+    <div class="col-span-12 lg:col-span-3 flex flex-col space-y-4">
+
+      <!-- LLM Reasoning Card -->
+      <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            Gemini Market Reasoning
+          </span>
+          <span id="insight-stance-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/50">BULLISH</span>
+        </div>
+
+        <!-- Target & Confidence -->
+        <div class="grid grid-cols-2 gap-2 mb-3 bg-gray-950/60 p-2.5 rounded-lg border border-gray-800/60 text-xs">
+          <div>
+            <div class="text-gray-400 text-[10px]">ML Forecast Target</div>
+            <div class="text-base font-bold text-purple-400 font-mono" id="insight-target-price">₹--</div>
+          </div>
+          <div>
+            <div class="text-gray-400 text-[10px]">Confidence Rating</div>
+            <div class="text-base font-bold text-emerald-400 font-mono" id="insight-confidence">--%</div>
+          </div>
+        </div>
+
+        <!-- Catalyst & Levels -->
+        <div class="space-y-2 text-xs mb-3">
+          <div>
+            <span class="text-gray-400 block text-[10px] uppercase tracking-wider">Primary Catalyst:</span>
+            <span class="text-gray-200 font-medium" id="insight-catalyst">Analyzing market data...</span>
+          </div>
+          <div class="flex justify-between items-center text-gray-300 pt-1 border-t border-gray-800">
+            <span>Support: <strong class="text-emerald-400 font-mono" id="insight-support">₹--</strong></span>
+            <span>Resistance: <strong class="text-rose-400 font-mono" id="insight-resistance">₹--</strong></span>
+          </div>
+        </div>
+
+        <!-- Educational Rationale -->
+        <div class="bg-gray-800/40 p-3 rounded-lg border border-gray-700/50 text-xs text-gray-300 leading-relaxed" id="insight-summary">
+          Loading market causal synthesis from Gemini 2.5 Flash...
+        </div>
+      </div>
+
+      <!-- Financial News Feed -->
+      <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 flex-1 flex flex-col overflow-hidden max-h-[300px]">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Marketaux Indian News</span>
+          <span class="text-[10px] text-gray-500 font-mono" id="news-count">0 items</span>
+        </div>
+        <div id="news-feed" class="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 text-xs divide-y divide-gray-800/40">
+          <div class="text-gray-500 text-center py-4">Ingesting financial headlines...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JavaScript Client Logic -->
+  <script>
+    let currentSymbol = 'RELIANCE';
+    let currentInterval = '5m';
+    let allTickers = [];
+    let currentCandles = [];
+
+    // Canvas Chart Setup
+    const canvas = document.getElementById('candleCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('chart-tooltip');
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      drawChart();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Fetch System Health
+    async function fetchHealth() {
+      try {
+        const res = await fetch('/ops/health');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Uptime & System
+        document.getElementById('uptime-badge').textContent = `Uptime: ${data.uptime}`;
+        document.getElementById('system-memory').textContent = `${data.process.memory_mb} MB`;
+        document.getElementById('system-cpu').textContent = `${data.process.cpu_percent}%`;
+
+        // Model Health
+        document.getElementById('model-name').textContent = data.model_health.model_name;
+        document.getElementById('model-latency').textContent = `${data.model_health.avg_latency_ms}ms`;
+        document.getElementById('model-inferences').textContent = data.model_health.total_inferences;
+        document.getElementById('model-rmse').textContent = data.model_health.rmse;
+        document.getElementById('model-ckpt').textContent = data.model_health.checkpoint_version;
+
+        // LLM Health
+        document.getElementById('llm-latency').textContent = `${data.llm_health.avg_latency_ms}ms`;
+        document.getElementById('llm-success-rate').textContent = `${data.llm_health.success_rate_pct}%`;
+        document.getElementById('llm-tokens').textContent = data.llm_health.total_tokens_approx;
+        document.getElementById('llm-errors').textContent = data.llm_health.error_count;
+
+        // API Keys Quotas
+        const td = data.api_keys.twelve_data;
+        document.getElementById('twelve-data-credits').textContent = `${td.credits_remaining} / 800 left`;
+        document.getElementById('twelve-data-bar').style.width = `${(td.credits_remaining / 800) * 100}%`;
+
+        const mx = data.api_keys.marketaux;
+        document.getElementById('marketaux-credits').textContent = `${mx.calls_remaining} / 100 left`;
+        document.getElementById('marketaux-bar').style.width = `${(mx.calls_remaining / 100) * 100}%`;
+
+        // Cache Stats
+        document.getElementById('cache-hit-rate').textContent = `${data.cache.hit_rate_pct}%`;
+        document.getElementById('cache-keys').textContent = data.cache.memory_keys_count;
+        document.getElementById('cache-mode-badge').textContent = data.cache.mode.toUpperCase();
+      } catch (err) {
+        console.error("Health fetch error:", err);
+      }
+    }
+
+    // Fetch Tickers
+    async function loadTickers() {
+      try {
+        const res = await fetch('/api/v1/market/tickers');
+        if (!res.ok) return;
+        const json = await res.json();
+        allTickers = json.data;
+        renderTickers(allTickers);
+      } catch (err) {
+        console.error("Tickers fetch error:", err);
+      }
+    }
+
+    function renderTickers(list) {
+      const container = document.getElementById('ticker-list');
+      container.innerHTML = '';
+      list.forEach(t => {
+        const isSelected = t.symbol === currentSymbol;
+        const isUp = t.change >= 0;
+        const div = document.createElement('div');
+        div.className = `p-3 flex items-center justify-between cursor-pointer transition hover:bg-gray-800/80 ${isSelected ? 'bg-purple-950/40 border-l-4 border-purple-500' : ''}`;
+        div.onclick = () => selectTicker(t.symbol);
+        div.innerHTML = `
+          <div>
+            <div class="font-bold text-xs text-white">${t.symbol}</div>
+            <div class="text-[10px] text-gray-400 truncate max-w-[120px]">${t.name}</div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono text-xs text-white">₹${t.price.toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>
+            <div class="text-[10px] font-mono ${isUp ? 'text-emerald-400' : 'text-rose-400'}">${isUp ? '+' : ''}${t.change_pct}%</div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function filterTickers() {
+      const q = document.getElementById('ticker-search').value.toUpperCase();
+      const filtered = allTickers.filter(t => t.symbol.includes(q) || t.name.toUpperCase().includes(q));
+      renderTickers(filtered);
+    }
+
+    function selectTicker(sym) {
+      currentSymbol = sym;
+      const t = allTickers.find(x => x.symbol === sym);
+      if (t) {
+        document.getElementById('selected-symbol-title').textContent = t.symbol;
+        document.getElementById('selected-company-title').textContent = t.name;
+        document.getElementById('selected-sector-title').textContent = t.sector;
+      }
+      renderTickers(allTickers);
+      loadChartData();
+      loadInsight();
+    }
+
+    function setChartInterval(intVal) {
+      currentInterval = intVal;
+      document.querySelectorAll('.interval-btn').forEach(b => {
+        if (b.dataset.interval === intVal) {
+          b.className = 'interval-btn text-xs px-2.5 py-1 bg-purple-900/60 text-purple-200 font-bold border border-gray-700';
+        } else {
+          b.className = 'interval-btn text-xs px-2.5 py-1 bg-gray-800 text-gray-400 hover:text-white border border-gray-700';
+        }
+      });
+      loadChartData();
+    }
+
+    // Fetch and Draw Chart
+    async function loadChartData() {
+      const incFc = document.getElementById('toggle-forecast').checked;
+      try {
+        const res = await fetch(`/api/v1/market/charts/${currentSymbol}?interval=${currentInterval}&include_forecast=${incFc}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        currentCandles = data.candles;
+
+        document.getElementById('actual-count-stat').textContent = data.actual_candles_count;
+        document.getElementById('forecast-count-stat').textContent = data.forecast_candles_count;
+
+        drawChart();
+      } catch (err) {
+        console.error("Chart data error:", err);
+      }
+    }
+
+    function drawChart() {
+      if (!currentCandles || currentCandles.length === 0) return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const paddingLeft = 10;
+      const paddingRight = 60;
+      const paddingTop = 25;
+      const paddingBottom = 35;
+      const chartW = w - paddingLeft - paddingRight;
+      const chartH = h - paddingTop - paddingBottom;
+
+      // Find min and max price across candles
+      let minPrice = Infinity;
+      let maxPrice = -Infinity;
+
+      currentCandles.forEach(c => {
+        if (c.low < minPrice) minPrice = c.low;
+        if (c.high > maxPrice) maxPrice = c.high;
+        if (c.lower_bound && c.lower_bound < minPrice) minPrice = c.lower_bound;
+        if (c.upper_bound && c.upper_bound > maxPrice) maxPrice = c.upper_bound;
+      });
+
+      const priceRange = (maxPrice - minPrice) || 1;
+      const pad = priceRange * 0.05;
+      const yMin = minPrice - pad;
+      const yMax = maxPrice + pad;
+      const totalYRange = yMax - yMin;
+
+      function priceToY(p) {
+        return paddingTop + chartH - ((p - yMin) / totalYRange) * chartH;
+      }
+
+      // Draw Grid Lines
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      const gridSteps = 5;
+      for (let i = 0; i <= gridSteps; i++) {
+        const y = paddingTop + (chartH / gridSteps) * i;
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(w - paddingRight, y);
+        ctx.stroke();
+
+        const pVal = yMax - (totalYRange / gridSteps) * i;
+        ctx.fillStyle = '#64748b';
+        ctx.font = '10px monospace';
+        ctx.fillText(`₹${pVal.toFixed(1)}`, w - paddingRight + 6, y + 3);
+      }
+
+      // Draw Candlesticks
+      const candleCount = currentCandles.length;
+      const candleW = Math.max(3, (chartW / candleCount) * 0.75);
+      const stepX = chartW / candleCount;
+
+      currentCandles.forEach((c, i) => {
+        const x = paddingLeft + (i * stepX) + (stepX / 2);
+        const yOpen = priceToY(c.open);
+        const yClose = priceToY(c.close);
+        const yHigh = priceToY(c.high);
+        const yLow = priceToY(c.low);
+
+        const isForecast = c.is_forecast;
+        let candleColor = c.color;
+
+        // Render confidence interval envelope for forecast
+        if (isForecast && c.upper_bound && c.lower_bound) {
+          const yUp = priceToY(c.upper_bound);
+          const yDown = priceToY(c.lower_bound);
+          ctx.fillStyle = 'rgba(138, 43, 226, 0.08)';
+          ctx.fillRect(x - (stepX/2), yUp, stepX, yDown - yUp);
+        }
+
+        // Wick
+        ctx.strokeStyle = candleColor;
+        ctx.lineWidth = isForecast ? 1.5 : 1;
+        ctx.beginPath();
+        ctx.moveTo(x, yHigh);
+        ctx.lineTo(x, yLow);
+        ctx.stroke();
+
+        // Candle Body
+        const topY = Math.min(yOpen, yClose);
+        const bodyH = Math.max(2, Math.abs(yClose - yOpen));
+
+        ctx.fillStyle = candleColor;
+        if (isForecast) {
+          // Glow effect on purple forecast candles
+          ctx.shadowColor = '#8A2BE2';
+          ctx.shadowBlur = 6;
+          ctx.fillRect(x - (candleW / 2), topY, candleW, bodyH);
+          ctx.shadowBlur = 0; // reset
+        } else {
+          ctx.fillRect(x - (candleW / 2), topY, candleW, bodyH);
+        }
+
+        // Store screen coordinates for hover tooltip
+        c._screenX = x;
+        c._screenY = topY;
+        c._width = candleW;
+      });
+    }
+
+    // Interactive Tooltip Hover
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      let found = null;
+      for (const c of currentCandles) {
+        if (c._screenX && Math.abs(c._screenX - mouseX) < 8) {
+          found = c;
+          break;
+        }
+      }
+
+      if (found) {
+        const isFc = found.is_forecast;
+        tooltip.innerHTML = `
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 rounded-full ${isFc ? 'bg-[#8A2BE2]' : (found.close >= found.open ? 'bg-[#00C805]' : 'bg-[#FF3B30]')}"></span>
+            <strong>${isFc ? 'PURPLE FORECAST CANDLE' : 'ACTUAL REAL CANDLE'}</strong>
+          </div>
+          <div class="text-[10px] text-gray-400 mb-1">${new Date(found.timestamp * 1000).toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'})} IST</div>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono">
+            <div>O: ₹${found.open}</div>
+            <div>H: ₹${found.high}</div>
+            <div>L: ₹${found.low}</div>
+            <div>C: ₹${found.close}</div>
+          </div>
+          ${isFc ? `<div class="mt-1 pt-1 border-t border-purple-800/50 text-[10px] text-purple-300">Confidence: ${Math.round((found.confidence || 0.8) * 100)}%</div>` : ''}
+        `;
+        tooltip.style.left = `${Math.min(canvas.width - 180, mouseX + 15)}px`;
+        tooltip.style.top = `${Math.min(canvas.height - 120, mouseY + 15)}px`;
+        tooltip.classList.remove('hidden');
+      } else {
+        tooltip.classList.add('hidden');
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      tooltip.classList.add('hidden');
+    });
+
+    // Fetch LLM Insights
+    async function loadInsight() {
+      try {
+        const res = await fetch(`/api/v1/market/insights/${currentSymbol}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        document.getElementById('insight-stance-badge').textContent = data.technical_stance;
+        document.getElementById('insight-stance-badge').className =
+          `px-2 py-0.5 rounded text-[10px] font-bold ${data.technical_stance === 'BULLISH' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-rose-950 text-rose-400 border border-rose-800/50'}`;
+
+        document.getElementById('insight-target-price').textContent = `₹${data.forecast_target.toFixed(2)}`;
+        document.getElementById('insight-confidence').textContent = `${data.confidence_pct}%`;
+        document.getElementById('insight-catalyst').textContent = data.primary_catalyst;
+        document.getElementById('insight-support').textContent = `₹${data.key_levels.support}`;
+        document.getElementById('insight-resistance').textContent = `₹${data.key_levels.resistance}`;
+        document.getElementById('insight-summary').textContent = data.summary;
+      } catch (err) {
+        console.error("Insight error:", err);
+      }
+    }
+
+    // Fetch News
+    async function loadNews() {
+      try {
+        const res = await fetch('/ops/news');
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById('news-feed');
+        document.getElementById('news-count').textContent = `${data.count} items`;
+
+        if (data.articles.length === 0) {
+          container.innerHTML = '<div class="text-gray-500 text-center py-4">No recent articles.</div>';
+          return;
+        }
+
+        container.innerHTML = '';
+        data.articles.forEach(a => {
+          const div = document.createElement('div');
+          div.className = 'pt-2';
+          div.innerHTML = `
+            <a href="${a.url}" target="_blank" class="font-semibold text-gray-200 hover:text-purple-400 transition block truncate">${a.title}</a>
+            <div class="flex items-center justify-between text-[10px] text-gray-500 mt-1">
+              <span>${a.source || 'Marketaux'}</span>
+              <span>${new Date(a.published_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            </div>
+          `;
+          container.appendChild(div);
+        });
+      } catch (err) {
+        console.error("News error:", err);
+      }
+    }
+
+    // Ops Trigger Actions
+    async function triggerIngest() {
+      await fetch('/ops/trigger-ingest', {method: 'POST'});
+      await loadTickers();
+      await loadChartData();
+      await fetchHealth();
+    }
+
+    async function triggerForecast() {
+      await fetch('/ops/trigger-forecast-all', {method: 'POST'});
+      await loadChartData();
+      await loadInsight();
+      await fetchHealth();
+    }
+
+    async function clearCache() {
+      await fetch('/ops/clear-cache', {method: 'POST'});
+      await fetchHealth();
+      alert("Redis & In-Memory cache cleared.");
+    }
+
+    // Initialize Dashboard
+    window.addEventListener('load', async () => {
+      resizeCanvas();
+      await fetchHealth();
+      await loadTickers();
+      await loadChartData();
+      await loadInsight();
+      await loadNews();
+
+      // Poll intervals
+      setInterval(fetchHealth, 5000);
+      setInterval(loadChartData, 10000);
+      setInterval(loadTickers, 15000);
+    });
+  </script>
+</body>
+</html>

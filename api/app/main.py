@@ -18,6 +18,7 @@ from app.models import Base
 from app.routes.auth import router as auth_router, get_me
 from app.routes.health import router as health_router
 from app.routes.wallet import router as wallet_router
+from app.routes.market import router as market_router
 from app.security import SecurityHeadersMiddleware
 from app.services.firebase_auth import init_firebase_admin
 
@@ -89,6 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(wallet_router, prefix="/api/v1")
+    app.include_router(market_router, prefix="/api/v1")
     app.add_api_route("/api/v1/me", get_me, methods=["GET"], tags=["auth"])
 
     return app

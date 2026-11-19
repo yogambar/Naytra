@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # App version
     APP_VERSION: str = Field(default="0.1.0")
 
+    # External APIs & Model Training Keys
+    TWELVE_DATA_API_KEY: str | None = Field(default=None)
+    MARKETAUX_API_KEY: str | None = Field(default=None)
+    GEMINI_API_KEY: str | None = Field(default=None)
+    HUGGING_FACE_TOKEN: str | None = Field(default=None)
+    ENGINE_URL: str = Field(default="http://127.0.0.1:8001")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
