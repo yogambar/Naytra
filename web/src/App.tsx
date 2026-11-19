@@ -44,6 +44,9 @@ const ProfilePage = React.lazy(() =>
 const StatusPage = React.lazy(() =>
   import('./pages/StatusPage').then((m) => ({ default: m.StatusPage }))
 );
+const SignupBonusPage = React.lazy(() =>
+  import('./pages/SignupBonusPage').then((m) => ({ default: m.SignupBonusPage }))
+);
 const DesignSystem = React.lazy(() =>
   import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }))
 );
@@ -123,6 +126,15 @@ export const App: React.FC = () => {
 
           {/* Protected Application Routes (Requires Verified Auth & Complete Profile) */}
           <Route element={<ProtectedRoute />}>
+            {/* Signup Bonus page (no AppShell/bottom nav) */}
+            <Route
+              path="/signup-bonus"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <SignupBonusPage />
+                </Suspense>
+              }
+            />
             <Route element={<AppShell />}>
               <Route
                 index

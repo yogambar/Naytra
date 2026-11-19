@@ -65,6 +65,15 @@ async def test_complete_profile_success(client: AsyncClient):
     assert data["city"] == "Mumbai"
     assert data["dob"] == "1998-05-15"
     assert data["terms_accepted"] is True
+    assert data["bonus_claimed"] is False
+
+    # Now claim bonus
+    claim_resp = await client.post(
+        "/api/v1/auth/claim-bonus",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert claim_resp.status_code == 200
+    assert claim_resp.json()["data"]["bonus_claimed"] is True
 
 
 @pytest.mark.asyncio

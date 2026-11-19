@@ -34,5 +34,10 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
     return <Navigate to="/complete-profile" replace />;
   }
 
+  // Check signup bonus claim (new users see the bonus page once)
+  if (profile && !profile.bonus_claimed && location.pathname !== '/signup-bonus') {
+    return <Navigate to="/signup-bonus" replace />;
+  }
+
   return children ? <>{children}</> : <Outlet />;
 };

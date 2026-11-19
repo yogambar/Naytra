@@ -38,6 +38,7 @@ class AppUser(Base):
     profile_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    bonus_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

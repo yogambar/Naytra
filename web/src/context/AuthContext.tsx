@@ -21,6 +21,7 @@ export interface UserProfileData {
   profile_complete: boolean;
   email_verified: boolean;
   terms_accepted: boolean;
+  bonus_claimed: boolean;
   created_at: string | null;
 }
 
@@ -154,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profile_complete: true,
           email_verified: true,
           terms_accepted: true,
+          bonus_claimed: true,
           created_at: new Date().toISOString(),
         });
         setIsLoading(false);
@@ -274,6 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             profile_complete: false,
             email_verified: false,
             terms_accepted: true,
+            bonus_claimed: false,
             created_at: new Date().toISOString(),
           });
         }

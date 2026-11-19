@@ -46,6 +46,7 @@ vi.mock('../context/AuthContext', async (importOriginal) => {
         profile_complete: true,
         email_verified: true,
         terms_accepted: true,
+        bonus_claimed: true,
       },
       idToken: 'mock-token:test_uid:trader@example.com:true',
       error: null,

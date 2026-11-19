@@ -105,6 +105,7 @@ def user_to_profile_data(user: AppUser) -> UserProfileData:
         profile_complete=user.profile_complete,
         email_verified=user.email_verified,
         terms_accepted=user.terms_accepted,
+        bonus_claimed=getattr(user, "bonus_claimed", False),
         created_at=user.created_at.isoformat() if user.created_at else None,
     )
 
@@ -112,6 +113,19 @@ def user_to_profile_data(user: AppUser) -> UserProfileData:
 @router.get("/me", response_model=SuccessResponse)
 async def get_me(user: Annotated[AppUser, Depends(get_current_user)]) -> SuccessResponse:
     """Return the profile and verification state of the currently signed-in user."""
+    return SuccessResponse(data=user_to_profile_data(user))
+
+
+@router.post("/claim-bonus", response_model=SuccessResponse)
+async def claim_bonus(
+    user: Annotated[AppUser, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SuccessResponse:
+    """Mark signup bonus as claimed so the new-user starting page is dismissed."""
+    user.bonus_claimed = True
+    await db.commit()
+    await db.refresh(user)
+    logger.info("Marked signup bonus as claimed for user %s", user.id)
     return SuccessResponse(data=user_to_profile_data(user))
 
 

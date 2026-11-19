@@ -57,6 +57,7 @@ class UserProfileData(BaseModel):
     profile_complete: bool = False
     email_verified: bool = False
     terms_accepted: bool = False
+    bonus_claimed: bool = False
     created_at: str | None = None
 
 
