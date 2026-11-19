@@ -165,19 +165,18 @@ export const CompleteProfilePage: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <PhoneInput
-                id="profile-phone"
-                value={phone}
-                onChange={setPhone}
-              />
-              <CityAutocomplete
-                id="profile-city"
-                value={city}
-                onChange={setCity}
-                placeholder="e.g. Mumbai or Dehradun"
-              />
-            </div>
+            {/* Phone & City */}
+            <PhoneInput
+              id="profile-phone"
+              value={phone}
+              onChange={setPhone}
+            />
+            <CityAutocomplete
+              id="profile-city"
+              value={city}
+              onChange={setCity}
+              placeholder="e.g. Mumbai or Dehradun"
+            />
 
             <div className="pt-2">
               <label className="flex items-start gap-2.5 text-xs text-text-secondary cursor-pointer select-none">

@@ -252,20 +252,18 @@ export const SignUpPage: React.FC = () => {
               />
             </div>
 
-            {/* Phone & City (Optional Grid) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <PhoneInput
-                id="signup-phone"
-                value={phone}
-                onChange={setPhone}
-              />
-              <CityAutocomplete
-                id="signup-city"
-                value={city}
-                onChange={setCity}
-                placeholder="e.g. Mumbai or Dehradun"
-              />
-            </div>
+            {/* Phone & City */}
+            <PhoneInput
+              id="signup-phone"
+              value={phone}
+              onChange={setPhone}
+            />
+            <CityAutocomplete
+              id="signup-city"
+              value={city}
+              onChange={setCity}
+              placeholder="e.g. Mumbai or Dehradun"
+            />
 
             {/* Password */}
             <div>

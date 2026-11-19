@@ -293,17 +293,12 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
       className={`relative w-full flex flex-col gap-1.5 text-left ${className}`}
     >
       {label && (
-        <div className="flex items-center justify-between">
-          <label
-            htmlFor={inputId}
-            className="text-xs font-semibold text-text-secondary tracking-wide select-none"
-          >
-            {label} {required && <span className="text-brand-down">*</span>}
-          </label>
-          <span className="text-[10px] text-text-tertiary">
-            Type or click 📍 to locate
-          </span>
-        </div>
+        <label
+          htmlFor={inputId}
+          className="text-xs font-semibold text-text-secondary tracking-wide select-none"
+        >
+          {label} {required && <span className="text-brand-down">*</span>}
+        </label>
       )}
 
       <div
