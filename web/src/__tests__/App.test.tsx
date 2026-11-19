@@ -4,13 +4,17 @@ import { MemoryRouter } from 'react-router-dom';
 import { App } from '../App';
 
 describe('App Router', () => {
-  it('renders dashboard at root /', async () => {
+  it('redirects unauthenticated user at root / to /welcome', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', {
+        name: /Get up to ₹10,000 signup bonus for paper trading!/i,
+      })
+    ).toBeInTheDocument();
   });
 
   it('renders status page at /status', async () => {
@@ -22,12 +26,21 @@ describe('App Router', () => {
     expect(await screen.findByText('Naytra is running')).toBeInTheDocument();
   });
 
-  it('redirects unknown route to /', async () => {
+  it('renders signin page at /signin', async () => {
     render(
-      <MemoryRouter initialEntries={['/some-unknown-path']}>
+      <MemoryRouter initialEntries={['/signin']}>
         <App />
       </MemoryRouter>
     );
-    expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeInTheDocument();
+  });
+
+  it('renders signup page at /signup', async () => {
+    render(
+      <MemoryRouter initialEntries={['/signup']}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(await screen.findByRole('heading', { name: /Create your account/i })).toBeInTheDocument();
   });
 });

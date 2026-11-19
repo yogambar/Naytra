@@ -12,8 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import Settings, get_settings
 from app.database import build_engine, build_session_factory
 from app.errors import register_error_handlers
+from app.routes.auth import router as auth_router, get_me
 from app.routes.health import router as health_router
 from app.security import SecurityHeadersMiddleware
+from app.services.firebase_auth import init_firebase_admin
 
 
 @asynccontextmanager
@@ -68,6 +70,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # ── Routes ──────────────────────────────────────────────────────────
     app.include_router(health_router)
+    app.include_router(auth_router, prefix="/api/v1")
+    app.add_api_route("/api/v1/me", get_me, methods=["GET"], tags=["auth"])
 
     return app
 

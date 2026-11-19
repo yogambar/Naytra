@@ -1,9 +1,34 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppShell } from './components/layout/AppShell';
-import { DashboardPage } from './pages/DashboardPage';
 import { Skeleton } from './design/Skeleton';
 
+// Auth Pages (Lazy loaded)
+const WelcomePage = React.lazy(() =>
+  import('./pages/WelcomePage').then((m) => ({ default: m.WelcomePage }))
+);
+const SignUpPage = React.lazy(() =>
+  import('./pages/SignUpPage').then((m) => ({ default: m.SignUpPage }))
+);
+const SignInPage = React.lazy(() =>
+  import('./pages/SignInPage').then((m) => ({ default: m.SignInPage }))
+);
+const VerifyEmailPage = React.lazy(() =>
+  import('./pages/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage }))
+);
+const CompleteProfilePage = React.lazy(() =>
+  import('./pages/CompleteProfilePage').then((m) => ({ default: m.CompleteProfilePage }))
+);
+const ForgotPasswordPage = React.lazy(() =>
+  import('./pages/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage }))
+);
+
+// App Pages (Lazy loaded)
+const DashboardPage = React.lazy(() =>
+  import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
 const HoldingsPage = React.lazy(() =>
   import('./pages/HoldingsPage').then((m) => ({ default: m.HoldingsPage }))
 );
@@ -37,74 +62,142 @@ const PageFallback: React.FC = () => (
 
 export const App: React.FC = () => {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-surface-base p-8 flex items-center justify-center">
-          <Skeleton variant="rectangular" width={300} height={200} />
-        </div>
-      }
-    >
-      <Routes>
-        {/* Main Application Shell with Bottom Tab Bar & Side Rail */}
-        <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+    <AuthProvider>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-surface-base p-8 flex items-center justify-center">
+            <Skeleton variant="rectangular" width={300} height={200} />
+          </div>
+        }
+      >
+        <Routes>
+          {/* Public Auth Flow Routes */}
           <Route
-            path="/holdings"
+            path="/welcome"
             element={
               <Suspense fallback={<PageFallback />}>
-                <HoldingsPage />
+                <WelcomePage />
               </Suspense>
             }
           />
           <Route
-            path="/learn"
+            path="/signup"
             element={
               <Suspense fallback={<PageFallback />}>
-                <LearnPage />
+                <SignUpPage />
               </Suspense>
             }
           />
           <Route
-            path="/wallet"
+            path="/signin"
             element={
               <Suspense fallback={<PageFallback />}>
-                <WalletPage />
+                <SignInPage />
               </Suspense>
             }
           />
           <Route
-            path="/profile"
+            path="/verify-email"
             element={
               <Suspense fallback={<PageFallback />}>
-                <ProfilePage />
+                <VerifyEmailPage />
               </Suspense>
             }
           />
-        </Route>
+          <Route
+            path="/complete-profile"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <CompleteProfilePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <ForgotPasswordPage />
+              </Suspense>
+            }
+          />
 
-        {/* Independent Diagnostic & Showcase Routes */}
-        <Route
-          path="/status"
-          element={
-            <Suspense fallback={<PageFallback />}>
-              <StatusPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="/design"
-          element={
-            <Suspense fallback={<PageFallback />}>
-              <DesignSystem />
-            </Suspense>
-          }
-        />
+          {/* Protected Application Routes (Requires Verified Auth & Complete Profile) */}
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route
+                index
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <DashboardPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <DashboardPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/holdings"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <HoldingsPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/learn"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <LearnPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <WalletPage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <ProfilePage />
+                  </Suspense>
+                }
+              />
+            </Route>
+          </Route>
 
-        {/* Catch-all redirect to Dashboard */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+          {/* Diagnostic & Showcase Routes */}
+          <Route
+            path="/status"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <StatusPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/design"
+            element={
+              <Suspense fallback={<PageFallback />}>
+                <DesignSystem />
+              </Suspense>
+            }
+          />
+
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </AuthProvider>
   );
 };
 

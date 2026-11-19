@@ -29,6 +29,40 @@ vi.mock('@capacitor/status-bar', () => ({
   Style: { Dark: 'DARK', Light: 'LIGHT' },
 }));
 
+// Mock AuthContext to provide an active authenticated user
+vi.mock('../context/AuthContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../context/AuthContext')>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { uid: 'test_uid', email: 'trader@example.com', emailVerified: true },
+      profile: {
+        id: 'test_uid',
+        email: 'trader@example.com',
+        name: 'Test Trader',
+        dob: '1990-01-01',
+        profile_complete: true,
+        email_verified: true,
+        terms_accepted: true,
+      },
+      idToken: 'mock-token:test_uid:trader@example.com:true',
+      error: null,
+      clearError: vi.fn(),
+      signInWithEmail: vi.fn(),
+      signUpWithEmail: vi.fn(),
+      signInWithGoogle: vi.fn(),
+      sendPasswordReset: vi.fn(),
+      resendVerificationEmail: vi.fn(),
+      completeUserProfile: vi.fn(),
+      refreshProfile: vi.fn(),
+      logout: vi.fn(),
+      loginWithMockUser: vi.fn(),
+    }),
+  };
+});
+
 describe('AppShell & Navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,8 +75,8 @@ describe('AppShell & Navigation', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
-    expect(screen.getByText(/Total Virtual Portfolio/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Total Virtual Portfolio/i)).toBeInTheDocument();
   });
 
   it('navigates to Holdings page when Holdings tab is clicked', async () => {

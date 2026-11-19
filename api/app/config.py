@@ -34,6 +34,20 @@ class Settings(BaseSettings):
     SIGNUP_BONUS_MAX_INR: int = Field(default=10000, ge=0)
     SIGNUP_BONUS_ENABLED: bool = Field(default=True)
 
+    # Firebase Auth configuration
+    FIREBASE_PROJECT_ID: str = Field(
+        default="naytra-53238",
+        description="Firebase project ID",
+    )
+    FIREBASE_AUTH_EMULATOR_HOST: str | None = Field(
+        default=None,
+        description="Optional host:port for Firebase Auth emulator, e.g. 127.0.0.1:9099",
+    )
+    GOOGLE_APPLICATION_CREDENTIALS: str | None = Field(
+        default=None,
+        description="Path to service account JSON key file for Firebase Admin",
+    )
+
     # App version
     APP_VERSION: str = Field(default="0.1.0")
 

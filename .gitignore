@@ -39,6 +39,8 @@ docker-data/
 htmlcov/
 .pytest_cache/
 coverage/
+test-results/
+playwright-report/
 
 # Capacitor
 android/.gradle/

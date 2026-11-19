@@ -137,6 +137,7 @@ Before adding a new dependency:
 | @capacitor/status-bar | https://capacitorjs.com | ^8.0.4 | MIT | Native status bar styling & theme sync | — |
 | @capacitor/splash-screen | https://capacitorjs.com | ^8.0.2 | MIT | Native splash screen management | — |
 | @capacitor/app | https://capacitorjs.com | ^8.1.2 | MIT | Hardware back button & app lifecycle | — |
+| @capacitor-firebase/authentication | https://github.com/capawesome-team/capacitor-firebase | ^8.0.0 | MIT | Native Google sign-in on Android | — |
 
 ---
 

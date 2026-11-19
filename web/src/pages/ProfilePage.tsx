@@ -4,10 +4,13 @@ import { ThemeToggle } from '../design/ThemeToggle';
 import { DataModeBadge } from '../design/Badge';
 import { Button } from '../design/Button';
 import { hapticTick } from '../utils/haptics';
-import { Smartphone, ExternalLink, Sliders, Palette } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Smartphone, ExternalLink, Sliders, Palette, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const ProfilePage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, profile, logout } = useAuth();
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
 
   const toggleHaptics = () => {
@@ -18,31 +21,68 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    hapticTick();
+    await logout();
+    navigate('/welcome');
+  };
+
+  const displayName = profile?.name || user?.displayName || 'Registered Paper Trader';
+  const displayEmail = profile?.email || user?.email || 'trader@naytra.local';
+  const isVerified = Boolean(profile?.email_verified || user?.emailVerified);
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
-          Profile & Settings
-        </h1>
-        <p className="text-sm text-text-secondary mt-0.5">
-          Account preferences, theme settings, and Android native controls
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
+            Profile & Settings
+          </h1>
+          <p className="text-sm text-text-secondary mt-0.5">
+            Account preferences, theme settings, and Android native controls
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 text-brand-down"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sign Out</span>
+        </Button>
       </div>
 
       {/* Account Info Card */}
       <Card3D elevation="e2" className="p-5 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-brand-ink flex items-center justify-center text-brand-marigold font-bold text-xl border border-brand-marigold/40">
-            N
+            {displayName.charAt(0).toUpperCase()}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-text-primary">Guest Paper Trader</h2>
+              <h2 className="text-lg font-bold text-text-primary">{displayName}</h2>
               <DataModeBadge mode="REPLAY" />
             </div>
-            <p className="text-xs text-text-tertiary mt-0.5 font-mono">
-              UID: guest_naytra_demo • Firebase Auth pending Step 3
+            <p className="text-xs text-text-secondary mt-0.5 font-mono">
+              {displayEmail}
             </p>
+            <div className="flex items-center gap-2 mt-1">
+              {isVerified ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-up">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Verified Account</span>
+                </span>
+              ) : (
+                <Link
+                  to="/verify-email"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-marigold-text hover:underline"
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  <span>Verify Email</span>
+                </Link>
+              )}
+            </div>
           </div>
         </div>
 

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.6.0",
     "@capacitor/android": "^8.6.2",
     "@capacitor/app": "^8.1.2",
     "@capacitor/cli": "^8.6.2",
@@ -25,6 +26,7 @@
     "@react-three/fiber": "^8.18.0",
     "@tanstack/react-query": "^5.66.0",
     "detect-gpu": "^5.0.43",
+    "firebase": "^13.3.0",
     "lucide-react": "^0.475.0",
     "motion": "^12.4.3",
     "react": "^19.0.0",

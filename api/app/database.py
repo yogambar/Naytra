@@ -1,6 +1,8 @@
 """SQLAlchemy 2 async engine & session factory."""
 from __future__ import annotations
 
+from typing import AsyncGenerator
+from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -17,3 +19,10 @@ def build_engine(database_url: str, **kwargs) -> AsyncEngine:
 def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     """Return a session factory bound to *engine*."""
     return async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency to yield an async database session."""
+    session_factory = request.app.state.session_factory
+    async with session_factory() as session:
+        yield session
