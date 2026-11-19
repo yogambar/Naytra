@@ -130,29 +130,67 @@ export async function syncOrInitFirestoreUser(
 
     if (snap.exists()) {
       const data = snap.data();
-      // Update email_verified if it changed
+      const updates: Record<string, any> = {};
+
       if (user.emailVerified && !data.email_verified) {
-        await updateDoc(userDocRef, {
-          email_verified: true,
-          updated_at: Timestamp.now(),
-        }).catch(() => null);
+        updates.email_verified = true;
         data.email_verified = true;
+      }
+      if (additional?.name && !data.name) {
+        updates.name = additional.name.trim();
+        data.name = updates.name;
+      }
+      if (additional?.dob && !data.dob) {
+        updates.dob = additional.dob;
+        data.dob = updates.dob;
+      }
+      if (additional?.phone && !data.phone) {
+        updates.phone = additional.phone.trim();
+        data.phone = updates.phone;
+      }
+      if (additional?.city && !data.city) {
+        updates.city = additional.city.trim();
+        data.city = updates.city;
+      }
+      if (additional?.terms_accepted && !data.terms_accepted) {
+        updates.terms_accepted = true;
+        data.terms_accepted = true;
+      }
+      if (
+        (additional?.dob && additional?.terms_accepted) ||
+        (data.dob && data.terms_accepted)
+      ) {
+        if (!data.profile_complete) {
+          updates.profile_complete = true;
+          data.profile_complete = true;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = Timestamp.now();
+        await updateDoc(userDocRef, updates).catch(() => null);
+      }
+
+      const existingProfile: UserProfileData = {
+        id: data.id || userId,
+        email: data.email || user.email || '',
+        name: data.name || user.displayName || null,
+        dob: data.dob || null,
+        phone: data.phone || null,
+        city: data.city || null,
+        profile_complete: Boolean(data.profile_complete),
+        email_verified: Boolean(data.email_verified || user.emailVerified),
+        terms_accepted: Boolean(data.terms_accepted),
+        bonus_claimed: Boolean(data.bonus_claimed),
+        created_at: timestampToISO(data.created_at),
+      };
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(existingProfile));
       }
 
       return {
-        profile: {
-          id: data.id || userId,
-          email: data.email || user.email || '',
-          name: data.name || user.displayName || null,
-          dob: data.dob || null,
-          phone: data.phone || null,
-          city: data.city || null,
-          profile_complete: Boolean(data.profile_complete),
-          email_verified: Boolean(data.email_verified || user.emailVerified),
-          terms_accepted: Boolean(data.terms_accepted),
-          bonus_claimed: Boolean(data.bonus_claimed),
-          created_at: timestampToISO(data.created_at),
-        },
+        profile: existingProfile,
         isNewUser: false,
       };
     }
@@ -216,39 +254,46 @@ export async function syncOrInitFirestoreUser(
       created_at: now,
     });
 
-    return {
-      profile: {
-        id: userId,
-        email: newUserDoc.email,
-        name: newUserDoc.name,
-        dob: newUserDoc.dob,
-        phone: newUserDoc.phone,
-        city: newUserDoc.city,
-        profile_complete: newUserDoc.profile_complete,
-        email_verified: newUserDoc.email_verified,
-        terms_accepted: newUserDoc.terms_accepted,
-        bonus_claimed: false,
-        created_at: now.toDate().toISOString(),
-      },
-      isNewUser: true,
+    const newProfile: UserProfileData = {
+      id: userId,
+      email: newUserDoc.email,
+      name: newUserDoc.name,
+      dob: newUserDoc.dob,
+      phone: newUserDoc.phone,
+      city: newUserDoc.city,
+      profile_complete: newUserDoc.profile_complete,
+      email_verified: newUserDoc.email_verified,
+      terms_accepted: newUserDoc.terms_accepted,
+      bonus_claimed: false,
+      created_at: now.toDate().toISOString(),
     };
+    // Persist to localStorage so refreshProfile() always finds it
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(newProfile));
+    }
+    return { profile: newProfile, isNewUser: true };
   } catch (err) {
     console.error('Firestore user init error:', err);
     // Return local fallback so user is not blocked if rules not yet published
+    const fallbackProfile: UserProfileData = {
+      id: userId,
+      email: user.email || '',
+      name: additional?.name || user.displayName || null,
+      dob: additional?.dob || null,
+      phone: additional?.phone || null,
+      city: additional?.city || null,
+      profile_complete: Boolean(additional?.dob && additional?.terms_accepted),
+      email_verified: Boolean(user.emailVerified),
+      terms_accepted: Boolean(additional?.terms_accepted),
+      bonus_claimed: false,
+      created_at: new Date().toISOString(),
+    };
+    // Persist fallback to localStorage so refreshProfile() finds it later
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_profile_${userId}`, JSON.stringify(fallbackProfile));
+    }
     return {
-      profile: {
-        id: userId,
-        email: user.email || '',
-        name: additional?.name || user.displayName || null,
-        dob: additional?.dob || null,
-        phone: additional?.phone || null,
-        city: additional?.city || null,
-        profile_complete: Boolean(additional?.dob && additional?.terms_accepted),
-        email_verified: Boolean(user.emailVerified),
-        terms_accepted: Boolean(additional?.terms_accepted),
-        bonus_claimed: false,
-        created_at: new Date().toISOString(),
-      },
+      profile: fallbackProfile,
       isNewUser: true,
     };
   }
@@ -427,20 +472,29 @@ export async function getFirestoreLedger(userId: string): Promise<LedgerItemDoc[
  */
 export async function deleteFirestoreUserAccount(userId: string): Promise<void> {
   try {
-    // 1. Delete ledger entries
-    const ledgerCol = collection(db, 'wallets', userId, 'ledger');
-    const snap = await getDocs(ledgerCol);
-    for (const d of snap.docs) {
-      await deleteDoc(d.ref).catch(() => null);
+    // 1. Delete ledger entries (best-effort)
+    try {
+      const ledgerCol = collection(db, 'wallets', userId, 'ledger');
+      const snap = await getDocs(ledgerCol);
+      for (const d of snap.docs) {
+        await deleteDoc(d.ref).catch(() => null);
+      }
+    } catch (ledgerErr) {
+      console.warn('Ledger cleanup deferred:', ledgerErr);
     }
 
-    // 2. Delete wallet document
+    // 2. Delete wallet document (best-effort)
     await deleteDoc(doc(db, 'wallets', userId)).catch(() => null);
 
-    // 3. Delete user document
+    // 3. Delete user document (best-effort)
     await deleteDoc(doc(db, 'users', userId)).catch(() => null);
 
-    // 4. Delete Firebase Auth user
+    // 4. Clear local cache
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`naytra_profile_${userId}`);
+    }
+
+    // 5. Delete Firebase Auth user
     if (auth.currentUser && auth.currentUser.uid === userId) {
       await auth.currentUser.delete();
     }

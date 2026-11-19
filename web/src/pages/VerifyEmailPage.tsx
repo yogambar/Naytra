@@ -36,7 +36,8 @@ export const VerifyEmailPage: React.FC = () => {
             clearInterval(interval);
             hapticSuccess();
             const updated = await refreshProfile();
-            if (updated && !updated.bonus_claimed) {
+            const bonusClaimed = Boolean(updated?.bonus_claimed ?? profile?.bonus_claimed);
+            if (!bonusClaimed) {
               navigate('/signup-bonus', { replace: true });
             } else {
               navigate('/dashboard', { replace: true });
@@ -75,7 +76,8 @@ export const VerifyEmailPage: React.FC = () => {
         if (auth.currentUser.emailVerified) {
           hapticSuccess();
           const updated = await refreshProfile();
-          if (updated && !updated.bonus_claimed) {
+          const bonusClaimed = Boolean(updated?.bonus_claimed ?? profile?.bonus_claimed);
+          if (!bonusClaimed) {
             navigate('/signup-bonus', { replace: true });
           } else {
             navigate('/dashboard', { replace: true });
@@ -86,7 +88,8 @@ export const VerifyEmailPage: React.FC = () => {
       const updated = await refreshProfile();
       if (updated?.email_verified) {
         hapticSuccess();
-        if (!updated.bonus_claimed) {
+        const bonusClaimed = Boolean(updated.bonus_claimed);
+        if (!bonusClaimed) {
           navigate('/signup-bonus', { replace: true });
         } else {
           navigate('/dashboard', { replace: true });

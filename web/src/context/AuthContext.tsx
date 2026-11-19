@@ -122,6 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const initResult = await syncOrInitFirestoreUser(fbUser);
         p = initResult.profile;
       }
+      // Always trust Firebase Auth for email_verified
+      if (p && fbUser.emailVerified && !p.email_verified) {
+        p.email_verified = true;
+      }
       return p;
     } catch (firestoreErr) {
       console.warn('Firestore profile fetch failed, trying backend API:', firestoreErr);
@@ -146,7 +150,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = useCallback(async (): Promise<UserProfileData | null> => {
     if (!auth.currentUser) return null;
     const p = await fetchUserProfile(auth.currentUser);
-    if (p) setProfile(p);
+    if (p) {
+      // Always trust Firebase Auth for email_verified (it may have changed since cache was written)
+      if (auth.currentUser.emailVerified && !p.email_verified) {
+        p.email_verified = true;
+        // Persist the updated flag to localStorage so ProtectedRoute sees it
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`naytra_profile_${auth.currentUser.uid}`, JSON.stringify(p));
+        }
+      }
+      setProfile(p);
+    }
     return p;
   }, [fetchUserProfile]);
 
@@ -247,6 +261,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Step 1: Create Firebase account
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
 
+        // Seed complete profile locally immediately so onAuthStateChanged sees it
+        const seedProfile: UserProfileData = {
+          id: cred.user.uid,
+          email: email.trim().toLowerCase(),
+          name: name.trim(),
+          dob,
+          phone: phone?.trim() || null,
+          city: city?.trim() || null,
+          profile_complete: true,
+          email_verified: false,
+          terms_accepted: true,
+          bonus_claimed: false,
+          created_at: new Date().toISOString(),
+        };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`naytra_profile_${cred.user.uid}`, JSON.stringify(seedProfile));
+        }
+        setProfile(seedProfile);
+
         // Step 2: Send email verification (fire-and-forget)
         sendEmailVerification(cred.user).catch((verifyErr) =>
           console.warn('Could not send verification email:', verifyErr)
@@ -264,7 +297,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           terms_accepted: true,
         });
 
-        setProfile(initResult.profile);
+        if (initResult?.profile) {
+          setProfile(initResult.profile);
+        }
 
         // Best effort: notify backend if running
         fetch(`${API_BASE}/api/v1/auth/complete-profile`, {

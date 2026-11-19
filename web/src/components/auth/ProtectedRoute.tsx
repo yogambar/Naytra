@@ -41,8 +41,13 @@ export const ProtectedRoute: React.FC<{ children?: React.ReactNode }> = ({ child
     return <Navigate to="/verify-email" replace />;
   }
 
-  // Check profile completion (name, dob, 18+ check, terms)
-  if (!profile.profile_complete && location.pathname !== '/complete-profile') {
+  // Check profile completion:
+  // Email/password users already provided full profile (name, dob 18+, terms) during registration.
+  // Google first-time users must complete profile before trading.
+  const isEmailUser = Boolean(
+    user?.providerData?.some((p) => p.providerId === 'password')
+  );
+  if (!isEmailUser && !profile.profile_complete && location.pathname !== '/complete-profile') {
     return <Navigate to="/complete-profile" replace />;
   }
 
