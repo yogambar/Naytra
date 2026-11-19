@@ -35,19 +35,22 @@ export const SignInPage: React.FC = () => {
     try {
       await signInWithEmail(email, password);
       navigate(from, { replace: true });
-    } catch {
-      // AuthContext sets generic error
-      setFormError('Invalid email or password. Please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Invalid email or password. Please try again.';
+      setFormError(msg);
     }
   };
 
   const handleGoogleSignIn = async () => {
     hapticTick();
+    clearError();
+    setFormError(null);
     try {
       await signInWithGoogle();
       navigate(from, { replace: true });
-    } catch {
-      // Handled in AuthContext
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in was canceled or failed. Please try again.';
+      setFormError(msg);
     }
   };
 

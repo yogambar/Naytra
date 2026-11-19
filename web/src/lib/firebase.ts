@@ -12,12 +12,12 @@ import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaMockKeyForLocalDevAndTests123456',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCyX6zu3cZWtoowugdsPQWP3Jv4pIOLV-o',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'naytra-53238.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'naytra-53238',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'naytra-53238.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1234567890',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1234567890:web:abcdef',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '933392757711',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:933392757711:web:a0a326f6958a75c801d8ba',
 };
 
 // Initialize Firebase only once

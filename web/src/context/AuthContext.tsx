@@ -61,6 +61,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+function formatFirebaseError(err: unknown, fallback: string): string {
+  if (!err || typeof err !== 'object') return fallback;
+  const code = 'code' in err ? String((err as { code: unknown }).code) : '';
+  const message = 'message' in err ? String((err as { message: unknown }).message) : '';
+
+  if (code === 'auth/operation-not-allowed' || message.includes('operation-not-allowed')) {
+    return 'Email/Password sign-in is not enabled in Firebase Console. Please go to Authentication > Sign-in method in Firebase Console and enable the Email/Password provider.';
+  }
+  if (code === 'auth/email-already-in-use' || message.includes('email-already-in-use')) {
+    return 'An account with this email address already exists. Please sign in instead.';
+  }
+  if (code === 'auth/popup-closed-by-user' || message.includes('popup-closed-by-user')) {
+    return 'Google sign-in popup was closed before completing. Please try again.';
+  }
+  if (code === 'auth/cancelled-popup-request' || message.includes('cancelled-popup-request')) {
+    return 'Google sign-in popup request was cancelled.';
+  }
+  if (code === 'auth/unauthorized-domain' || message.includes('unauthorized-domain')) {
+    return 'This domain is not authorized in Firebase Console. Please add localhost to Authorized Domains under Authentication > Settings.';
+  }
+  if (code === 'auth/api-key-not-valid' || message.includes('api-key-not-valid') || code === 'auth/invalid-api-key') {
+    return 'Invalid Firebase API key. Please verify your Firebase project credentials in web/.env.';
+  }
+  if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+    return 'Invalid email or password. Please try again.';
+  }
+  if (code === 'auth/network-request-failed' || message.includes('network-request-failed')) {
+    return 'Network error connecting to Firebase. Please check your internet connection.';
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfileData | null>(null);
@@ -144,9 +176,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hapticSuccess();
     } catch (err: unknown) {
       hapticError();
-      const message = err instanceof Error ? err.message : 'Invalid email or password';
-      setError('Invalid email or password. Please try again.');
-      throw new Error(message);
+      const friendly = formatFirebaseError(err, 'Invalid email or password. Please try again.');
+      setError(friendly);
+      throw new Error(friendly);
     } finally {
       setIsLoading(false);
     }
@@ -198,9 +230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hapticSuccess();
       } catch (err: unknown) {
         hapticError();
-        const message = err instanceof Error ? err.message : 'Registration failed';
-        setError(message);
-        throw err;
+        const friendly = formatFirebaseError(err, 'Registration failed');
+        setError(friendly);
+        throw new Error(friendly);
       } finally {
         setIsLoading(false);
       }
@@ -223,9 +255,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: unknown) {
       hapticError();
-      const message = err instanceof Error ? err.message : 'Google sign-in failed';
-      setError('Google sign-in was canceled or failed. Please try again.');
-      throw new Error(message);
+      const friendly = formatFirebaseError(err, 'Google sign-in was canceled or failed. Please try again.');
+      setError(friendly);
+      throw new Error(friendly);
     } finally {
       setIsLoading(false);
     }

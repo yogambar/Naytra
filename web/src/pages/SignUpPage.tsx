@@ -129,11 +129,14 @@ export const SignUpPage: React.FC = () => {
 
   const handleGoogleSignIn = async () => {
     hapticTick();
+    clearError();
+    setFormError(null);
     try {
       await signInWithGoogle();
       navigate('/dashboard');
-    } catch {
-      // Handled in AuthContext
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in was canceled or failed. Please try again.';
+      setFormError(msg);
     }
   };
 
