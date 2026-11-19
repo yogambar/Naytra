@@ -73,7 +73,11 @@ export const CompleteProfilePage: React.FC = () => {
         city: city.trim() || undefined,
         terms_accepted: true,
       });
-      navigate('/dashboard');
+      if (!profile?.bonus_claimed) {
+        navigate('/signup-bonus');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not complete profile';
       setFormError(msg);

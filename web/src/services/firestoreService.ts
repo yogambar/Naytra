@@ -244,10 +244,14 @@ export async function syncOrInitFirestoreUser(
  */
 export async function claimFirestoreBonus(userId: string): Promise<void> {
   const userDocRef = doc(db, 'users', userId);
-  await updateDoc(userDocRef, {
-    bonus_claimed: true,
-    updated_at: Timestamp.now(),
-  });
+  await setDoc(
+    userDocRef,
+    {
+      bonus_claimed: true,
+      updated_at: Timestamp.now(),
+    },
+    { merge: true }
+  );
 }
 
 /**
@@ -264,15 +268,69 @@ export async function completeFirestoreUserProfile(
   }
 ): Promise<void> {
   const userDocRef = doc(db, 'users', userId);
-  await updateDoc(userDocRef, {
-    name: data.name.trim(),
-    dob: data.dob,
-    phone: data.phone?.trim() || null,
-    city: data.city?.trim() || null,
-    terms_accepted: true,
-    profile_complete: true,
-    updated_at: Timestamp.now(),
-  });
+  const now = Timestamp.now();
+  const currentUser = auth.currentUser;
+
+  // Use setDoc with merge: true so it creates or updates seamlessly
+  await setDoc(
+    userDocRef,
+    {
+      id: userId,
+      email: (currentUser?.email || '').toLowerCase(),
+      name: data.name.trim(),
+      dob: data.dob,
+      phone: data.phone?.trim() || null,
+      city: data.city?.trim() || null,
+      terms_accepted: true,
+      profile_complete: true,
+      email_verified: Boolean(currentUser?.emailVerified),
+      updated_at: now,
+    },
+    { merge: true }
+  );
+
+  // Ensure wallet and ledger exist as well
+  try {
+    const walletDocRef = doc(db, 'wallets', userId);
+    const wSnap = await getDoc(walletDocRef);
+    if (!wSnap.exists()) {
+      await setDoc(walletDocRef, {
+        user_id: userId,
+        balance_paise: SIGNUP_BONUS_PAISE,
+        locked_paise: 0,
+        total_cash_paise: SIGNUP_BONUS_PAISE,
+        initial_grant_paise: SIGNUP_BONUS_PAISE,
+        balance_inr: SIGNUP_BONUS_PAISE / 100,
+        locked_inr: 0,
+        total_cash_inr: SIGNUP_BONUS_PAISE / 100,
+        initial_grant_inr: SIGNUP_BONUS_PAISE / 100,
+        currency: 'INR',
+        is_virtual: true,
+        created_at: now,
+        updated_at: now,
+      });
+
+      const ledgerDocRef = doc(db, 'wallets', userId, 'ledger', `tx_signup_${userId}`);
+      await setDoc(ledgerDocRef, {
+        id: `tx_signup_${userId}`,
+        tx_id: `tx_${Date.now()}_signup`,
+        user_id: userId,
+        account_type: 'USER_CASH',
+        type: 'SIGNUP_BONUS',
+        description: 'Signup practice bonus grant',
+        debit_paise: 0,
+        credit_paise: SIGNUP_BONUS_PAISE,
+        amount_paise: SIGNUP_BONUS_PAISE,
+        amount_inr: SIGNUP_BONUS_PAISE / 100,
+        balance_after_paise: SIGNUP_BONUS_PAISE,
+        balance_after_inr: SIGNUP_BONUS_PAISE / 100,
+        is_credit: true,
+        created_at: now,
+      });
+    }
+  } catch (wErr) {
+    console.warn('Could not ensure wallet in completeProfile:', wErr);
+  }
 }
 
 /**

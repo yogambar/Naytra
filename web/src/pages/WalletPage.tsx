@@ -316,11 +316,10 @@ export const WalletPage: React.FC = () => {
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    tx.is_credit
-                      ? 'bg-brand-up-bg text-brand-up'
-                      : 'bg-surface-inset text-text-secondary'
-                  }`}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${tx.is_credit
+                    ? 'bg-brand-up-bg text-brand-up'
+                    : 'bg-surface-inset text-text-secondary'
+                    }`}
                 >
                   {tx.is_credit ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
                 </div>
@@ -340,9 +339,8 @@ export const WalletPage: React.FC = () => {
 
               <div className="text-right">
                 <div
-                  className={`text-sm font-bold font-mono ${
-                    tx.is_credit ? 'text-brand-up' : 'text-text-primary'
-                  }`}
+                  className={`text-sm font-bold font-mono ${tx.is_credit ? 'text-brand-up' : 'text-text-primary'
+                    }`}
                 >
                   {tx.is_credit ? `+${formatINR(tx.amount_inr)}` : `-${formatINR(Math.abs(tx.amount_inr))}`}
                 </div>
