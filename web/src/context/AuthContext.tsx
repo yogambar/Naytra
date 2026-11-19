@@ -135,6 +135,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Listen to Firebase auth state changes
   useEffect(() => {
     let isMounted = true;
+
+    // Check for local test / demo mock token
+    if (typeof window !== 'undefined') {
+      const storedMock = localStorage.getItem('naytra_mock_token');
+      if (storedMock) {
+        setIdToken(storedMock);
+        const parts = storedMock.split(':');
+        const uid = parts[1] || 'mock_uid_1';
+        const email = parts[2] || 'trader@example.com';
+        setProfile({
+          id: uid,
+          email,
+          name: 'Mock Trader',
+          dob: '1995-01-01',
+          phone: null,
+          city: null,
+          profile_complete: true,
+          email_verified: true,
+          terms_accepted: true,
+          created_at: new Date().toISOString(),
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (!isMounted) return;
       setUser(fbUser);
@@ -348,6 +374,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout
   const logoutHandler = useCallback(async () => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('naytra_mock_token');
+      }
       if (idToken) {
         await fetch(`${API_BASE}/api/v1/auth/logout`, {
           method: 'POST',
@@ -367,6 +396,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithMockUser = useCallback(
     async (uid: string = 'mock_uid_1', email: string = 'trader@example.com', verified: boolean = true) => {
       const mockToken = `mock-token:${uid}:${email}:${verified}`;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('naytra_mock_token', mockToken);
+      }
       setIdToken(mockToken);
       const p = await fetchBackendProfile(mockToken);
       setProfile(p);

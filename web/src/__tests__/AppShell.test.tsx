@@ -115,7 +115,7 @@ describe('AppShell & Navigation', () => {
     );
 
     expect(await screen.findByRole('heading', { name: /Virtual Wallet & Ledger/i })).toBeInTheDocument();
-    expect(await screen.findByText(/538,550 paise/i)).toBeInTheDocument();
+    expect(await screen.findByText(/10,00,000 paise/i)).toBeInTheDocument();
     expect(await screen.findByText(/Double-entry ledger in integer paise/i)).toBeInTheDocument();
   });
 

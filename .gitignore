@@ -50,5 +50,8 @@ android/local.properties
 
 # Misc
 *.log
+*.db
+*.sqlite
+*.sqlite3
 .jdk21/
 

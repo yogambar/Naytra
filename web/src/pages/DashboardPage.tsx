@@ -1,14 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card3D } from '../design/Card3D';
 import { DataModeBadge } from '../design/Badge';
 import { Skeleton } from '../design/Skeleton';
 import { Sparkline } from '../design/Sparkline';
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Wallet, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const sampleSparkline = [72400, 72550, 72480, 72690, 72850, 72800, 72980, 73120];
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+function formatINR(val: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(val);
+}
 
 export const DashboardPage: React.FC = () => {
+  const { idToken } = useAuth();
+  const [totalValue, setTotalValue] = useState<number>(10000.0);
+
+  useEffect(() => {
+    if (!idToken) return;
+    fetch(`${API_BASE}/api/v1/wallet`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.ok && json.data?.total_cash_inr) {
+          setTotalValue(json.data.total_cash_inr);
+        }
+      })
+      .catch(() => null);
+  }, [idToken]);
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
@@ -40,7 +68,7 @@ export const DashboardPage: React.FC = () => {
             </span>
             <div className="flex items-baseline gap-3 mt-1.5">
               <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-text-primary">
-                ₹10,240.50
+                {formatINR(totalValue)}
               </span>
               <span className="inline-flex items-center text-xs font-bold text-brand-up bg-brand-up-bg px-2 py-0.5 rounded-full border border-brand-up/30">
                 <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" />

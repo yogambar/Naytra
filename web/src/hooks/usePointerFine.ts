@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 
 export function usePointerFine(): boolean {
   const [isFine, setIsFine] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return window.matchMedia('(pointer: fine)').matches;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+    return Boolean(window.matchMedia('(pointer: fine)')?.matches);
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
 
     const mediaQuery = window.matchMedia('(pointer: fine)');
+    if (!mediaQuery || typeof mediaQuery.addEventListener !== 'function') return;
+
     const handleChange = (e: MediaQueryListEvent) => {
       setIsFine(e.matches);
     };

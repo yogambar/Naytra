@@ -77,3 +77,50 @@ class CheckPasswordData(BaseModel):
     count: int
     message: str
 
+
+# ── Virtual Wallet & Double-Entry Ledger Schemas ────────────────────────────
+
+class WalletData(BaseModel):
+    user_id: str
+    balance_paise: int
+    balance_inr: float
+    locked_paise: int
+    locked_inr: float
+    total_cash_paise: int
+    total_cash_inr: float
+    initial_grant_paise: int
+    initial_grant_inr: float
+    currency: str = "INR"
+    is_virtual: bool = True
+
+
+class LedgerItemData(BaseModel):
+    id: str
+    tx_id: str
+    type: str
+    description: str
+    debit_paise: int
+    credit_paise: int
+    amount_paise: int
+    amount_inr: float
+    balance_after_paise: int
+    balance_after_inr: float
+    is_credit: bool
+    ref_id: str | None = None
+    created_at: str
+
+
+class LedgerHistoryData(BaseModel):
+    items: list[LedgerItemData]
+    total: int
+    limit: int
+    offset: int
+
+
+class WalletAuditData(BaseModel):
+    is_balanced: bool
+    system_sum_paise: int
+    total_entries: int
+    message: str
+
+

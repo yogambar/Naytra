@@ -2,20 +2,26 @@
 from __future__ import annotations
 
 import time
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import Settings, get_settings
 from app.database import build_engine, build_session_factory
 from app.errors import register_error_handlers
+from app.models import Base
 from app.routes.auth import router as auth_router, get_me
 from app.routes.health import router as health_router
+from app.routes.wallet import router as wallet_router
 from app.security import SecurityHeadersMiddleware
 from app.services.firebase_auth import init_firebase_admin
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -25,7 +31,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = time.time()
 
     # ── Engine + session factory ────────────────────────────────────────
-    engine = build_engine(settings.DATABASE_URL, echo=settings.DEBUG)
+    engine = build_engine(settings.DATABASE_URL, echo=False)
+    # Check if primary database is reachable; if not in DEBUG mode, fallback to SQLite
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        if settings.DEBUG:
+            logger.warning("Primary database %s unavailable, falling back to local SQLite: %s", settings.DATABASE_URL, exc)
+            await engine.dispose()
+            engine = build_engine("sqlite+aiosqlite:///./naytra.db", echo=False)
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        else:
+            raise
+
     app.state.engine = engine
     app.state.session_factory = build_session_factory(engine)
 
@@ -71,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ── Routes ──────────────────────────────────────────────────────────
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(wallet_router, prefix="/api/v1")
     app.add_api_route("/api/v1/me", get_me, methods=["GET"], tags=["auth"])
 
     return app
