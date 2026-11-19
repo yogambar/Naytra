@@ -5,6 +5,9 @@ import { AlertCircle, UserCheck } from 'lucide-react';
 import { LogoNFallback } from '../three/Fallbacks';
 import { Button } from '../design/Button';
 import { Input } from '../design/Input';
+import { PhoneInput } from '../components/auth/PhoneInput';
+import { CityAutocomplete } from '../components/auth/CityAutocomplete';
+import { validateIndianPhone } from '../utils/phoneValidation';
 import { useAuth } from '../context/AuthContext';
 import { hapticTick, hapticError } from '../utils/haptics';
 
@@ -56,6 +59,15 @@ export const CompleteProfilePage: React.FC = () => {
       setFormError('You must be at least 18 years old to trade on Naytra.');
       hapticError();
       return;
+    }
+
+    if (phone.trim()) {
+      const phoneVal = validateIndianPhone(phone, true);
+      if (!phoneVal.valid) {
+        setFormError(phoneVal.error || 'Please enter a valid 10-digit Indian mobile number (+91).');
+        hapticError();
+        return;
+      }
     }
 
     if (!termsAccepted) {
@@ -154,32 +166,17 @@ export const CompleteProfilePage: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="profile-phone" className="block text-xs font-semibold text-text-secondary mb-1">
-                  Phone <span className="text-text-tertiary">(Optional)</span>
-                </label>
-                <Input
-                  id="profile-phone"
-                  aria-label="Phone Number"
-                  type="tel"
-                  placeholder="+91..."
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="profile-city" className="block text-xs font-semibold text-text-secondary mb-1">
-                  City <span className="text-text-tertiary">(Optional)</span>
-                </label>
-                <Input
-                  id="profile-city"
-                  aria-label="City"
-                  type="text"
-                  placeholder="e.g. Bengaluru"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
+              <PhoneInput
+                id="profile-phone"
+                value={phone}
+                onChange={setPhone}
+              />
+              <CityAutocomplete
+                id="profile-city"
+                value={city}
+                onChange={setCity}
+                placeholder="e.g. Mumbai or Dehradun"
+              />
             </div>
 
             <div className="pt-2">

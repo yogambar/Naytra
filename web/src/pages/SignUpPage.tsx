@@ -8,6 +8,9 @@ import { Input } from '../design/Input';
 import { useAuth } from '../context/AuthContext';
 import { evaluatePasswordStrength } from '../utils/passwordStrength';
 import { checkPasswordBreached } from '../utils/pwnedPasswords';
+import { validateIndianPhone } from '../utils/phoneValidation';
+import { PhoneInput } from '../components/auth/PhoneInput';
+import { CityAutocomplete } from '../components/auth/CityAutocomplete';
 import { hapticTick, hapticError } from '../utils/haptics';
 
 export const SignUpPage: React.FC = () => {
@@ -91,6 +94,15 @@ export const SignUpPage: React.FC = () => {
       setFormError('You must be at least 18 years old to trade on Naytra.');
       hapticError();
       return;
+    }
+
+    if (phone.trim()) {
+      const phoneVal = validateIndianPhone(phone, true);
+      if (!phoneVal.valid) {
+        setFormError(phoneVal.error || 'Please enter a valid 10-digit Indian mobile number (+91).');
+        hapticError();
+        return;
+      }
     }
 
     if (!strength.hasMinLength) {
@@ -242,32 +254,17 @@ export const SignUpPage: React.FC = () => {
 
             {/* Phone & City (Optional Grid) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="signup-phone" className="block text-xs font-semibold text-text-secondary mb-1">
-                  Phone <span className="text-text-tertiary">(Optional)</span>
-                </label>
-                <Input
-                  id="signup-phone"
-                  aria-label="Phone Number"
-                  type="tel"
-                  placeholder="+91..."
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="signup-city" className="block text-xs font-semibold text-text-secondary mb-1">
-                  City <span className="text-text-tertiary">(Optional)</span>
-                </label>
-                <Input
-                  id="signup-city"
-                  aria-label="City"
-                  type="text"
-                  placeholder="e.g. Mumbai"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                />
-              </div>
+              <PhoneInput
+                id="signup-phone"
+                value={phone}
+                onChange={setPhone}
+              />
+              <CityAutocomplete
+                id="signup-city"
+                value={city}
+                onChange={setCity}
+                placeholder="e.g. Mumbai or Dehradun"
+              />
             </div>
 
             {/* Password */}

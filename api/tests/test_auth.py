@@ -128,6 +128,47 @@ async def test_duplicate_email_conflict(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_complete_profile_rejects_invalid_phone(client: AsyncClient):
+    """Rejects phone numbers that do not match standard Indian mobile allocation."""
+    token = "mock-token:uid_bad_phone:badphone@example.com:true"
+    payload = {
+        "name": "Bad Phone",
+        "dob": "1995-01-01",
+        "phone": "1234567890",  # Starts with 1 (invalid in India)
+        "terms_accepted": True,
+    }
+    resp = await client.post(
+        "/api/v1/auth/complete-profile",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+    assert "valid 10-digit Indian mobile number" in resp.json()["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_complete_profile_normalizes_raw_indian_phone(client: AsyncClient):
+    """Raw 10-digit Indian phone (e.g. 8439902894) is normalized to +918439902894."""
+    token = "mock-token:uid_norm_phone:normphone@example.com:true"
+    payload = {
+        "name": "Normal Phone",
+        "dob": "1995-01-01",
+        "phone": "8439902894",
+        "city": "Dehradun",
+        "terms_accepted": True,
+    }
+    resp = await client.post(
+        "/api/v1/auth/complete-profile",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["phone"] == "+918439902894"
+    assert data["city"] == "Dehradun"
+
+
+@pytest.mark.asyncio
 async def test_logout_revokes_tokens(client: AsyncClient):
     """POST /api/v1/auth/logout succeeds."""
     token = "mock-token:uid_logout:logout@example.com:true"

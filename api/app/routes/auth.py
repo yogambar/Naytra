@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from typing import Annotated
 
@@ -159,9 +160,20 @@ async def complete_profile(
             detail="You must be at least 18 years old to trade on Naytra.",
         )
 
+    phone_val = None
+    if payload.phone and payload.phone.strip():
+        cleaned_phone = re.sub(r"[\s\-]", "", payload.phone.strip())
+        match = re.match(r"^(\+91|0)?([6-9]\d{9})$", cleaned_phone)
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please enter a valid 10-digit Indian mobile number (+91).",
+            )
+        phone_val = f"+91{match.group(2)}"
+
     user.name = name
     user.dob = birth
-    user.phone = payload.phone.strip() if payload.phone else None
+    user.phone = phone_val
     user.city = payload.city.strip() if payload.city else None
     user.terms_accepted = True
     user.profile_complete = True
