@@ -16,7 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getFirestoreWallet, recordTransactionInLedger } from '../../services/firestoreService';
+import { getFirestoreWallet, executePaperTrade } from '../../services/firestoreService';
 
 interface StockChartModalProps {
   symbol: string;
@@ -197,37 +197,27 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   const handleExecuteTrade = async () => {
     if (!user?.uid || !chartData) return;
     const latestPrice = chartData.candles.find((c) => !c.is_forecast)?.close || 1500;
-    const totalCostPaise = Math.round(latestPrice * quantity * 100);
-
-    if (orderSide === 'BUY' && totalCostPaise > walletBalancePaise) {
-      alert('Insufficient virtual balance to execute this trade.');
-      return;
-    }
+    const pricePaise = Math.round(latestPrice * 100);
 
     setOrderSubmitting(true);
     try {
-      // 1. Record in double-entry ledger in integer paise
-      await recordTransactionInLedger(user.uid, {
-        type: orderSide === 'BUY' ? 'TRADE_BUY' : 'TRADE_SELL',
-        amount_paise: totalCostPaise,
-        balance_after_paise:
-          orderSide === 'BUY'
-            ? walletBalancePaise - totalCostPaise
-            : walletBalancePaise + totalCostPaise,
-        description: `Virtual ${orderSide} ${quantity} ${symbol} @ ₹${latestPrice.toFixed(2)}`,
-        reference_id: `ord_${Date.now()}_${symbol}`,
+      const res = await executePaperTrade(user.uid, {
+        symbol,
+        side: orderSide,
+        quantity,
+        price_paise: pricePaise,
       });
 
-      setWalletBalancePaise((prev) =>
-        orderSide === 'BUY' ? prev - totalCostPaise : prev + totalCostPaise
-      );
-      setOrderSuccessMsg(
-        `Successfully executed virtual ${orderSide} of ${quantity} shares of ${symbol}!`
-      );
-      if (onTradeSuccess) onTradeSuccess();
+      if (!res.success) {
+        alert(res.message);
+      } else {
+        setWalletBalancePaise(res.balance_after_paise);
+        setOrderSuccessMsg(res.message);
+        if (onTradeSuccess) onTradeSuccess();
+      }
     } catch (err) {
       console.error('Trade error:', err);
-      alert('Failed to record virtual trade.');
+      alert('Failed to execute virtual trade.');
     } finally {
       setOrderSubmitting(false);
     }

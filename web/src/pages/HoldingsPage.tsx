@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card3D } from '../design/Card3D';
 import { Tabs } from '../design/Tabs';
 import { Input } from '../design/Input';
@@ -6,13 +6,25 @@ import { Skeleton } from '../design/Skeleton';
 import { Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { fetchMarketTickers, MarketTicker } from '../services/marketService';
 import { StockChartModal } from '../components/market/StockChartModal';
+import { useAuth } from '../context/AuthContext';
+import { getFirestorePortfolio, PortfolioDoc } from '../services/firestoreService';
 
 export const HoldingsPage: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [tickers, setTickers] = useState<MarketTicker[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioDoc | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
+
+  const loadPortfolio = useCallback(() => {
+    if (user?.uid) {
+      getFirestorePortfolio(user.uid).then((p) => {
+        if (p) setPortfolio(p);
+      });
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     fetchMarketTickers()
@@ -21,7 +33,28 @@ export const HoldingsPage: React.FC = () => {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+
+    loadPortfolio();
+  }, [loadPortfolio]);
+
+  const userHoldings = portfolio?.holdings || [];
+  const holdingsMap = new Map(userHoldings.map((h) => [h.symbol, h]));
+
+  // Compute portfolio valuation
+  let totalInvested = 0;
+  let currentValue = 0;
+
+  userHoldings.forEach((h) => {
+    const inv = h.invested_paise / 100;
+    const ticker = tickers.find((t) => t.symbol === h.symbol);
+    const ltp = ticker?.price || h.avg_price_paise / 100;
+    const val = h.quantity * ltp;
+    totalInvested += inv;
+    currentValue += val;
+  });
+
+  const unrealizedPnl = currentValue - totalInvested;
+  const unrealizedPnlPct = totalInvested > 0 ? (unrealizedPnl / totalInvested) * 100 : 0;
 
   // Filter tickers based on search and tab
   const filteredTickers = tickers.filter((t) => {
@@ -33,7 +66,7 @@ export const HoldingsPage: React.FC = () => {
 
     if (activeTab === 'gainers') return (t.change_pct ?? 0) > 0;
     if (activeTab === 'losers') return (t.change_pct ?? 0) < 0;
-    if (activeTab === 'holdings') return t.symbol === 'RELIANCE' || t.symbol === 'INFY';
+    if (activeTab === 'holdings') return holdingsMap.has(t.symbol);
     return true;
   });
 
@@ -53,17 +86,29 @@ export const HoldingsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card3D elevation="e2" className="p-4">
           <span className="text-xs font-bold text-text-tertiary uppercase">Total Invested</span>
-          <p className="text-xl font-bold font-mono text-text-primary mt-1">₹4,855.00</p>
-          <span className="text-[11px] text-text-tertiary">2 Positions</span>
+          <p className="text-xl font-bold font-mono text-text-primary mt-1">
+            ₹{totalInvested.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </p>
+          <span className="text-[11px] text-text-tertiary">
+            {userHoldings.length} Active {userHoldings.length === 1 ? 'Position' : 'Positions'}
+          </span>
         </Card3D>
         <Card3D elevation="e2" className="p-4">
           <span className="text-xs font-bold text-text-tertiary uppercase">Current Value</span>
-          <p className="text-xl font-bold font-mono text-text-primary mt-1">₹4,820.00</p>
+          <p className="text-xl font-bold font-mono text-text-primary mt-1">
+            ₹{currentValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </p>
           <span className="text-[11px] text-text-tertiary">Real-time marks</span>
         </Card3D>
         <Card3D elevation="e2" className="p-4">
           <span className="text-xs font-bold text-text-tertiary uppercase">Unrealized P&L</span>
-          <p className="text-xl font-bold font-mono text-brand-down mt-1">-₹35.00 (-0.72%)</p>
+          <p
+            className={`text-xl font-bold font-mono mt-1 ${
+              unrealizedPnl >= 0 ? 'text-brand-up' : 'text-brand-down'
+            }`}
+          >
+            {unrealizedPnl >= 0 ? '+' : ''}₹{unrealizedPnl.toFixed(2)} ({unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(2)}%)
+          </p>
           <span className="text-[11px] text-text-tertiary">Virtual return</span>
         </Card3D>
       </div>
@@ -82,7 +127,7 @@ export const HoldingsPage: React.FC = () => {
         <Tabs
           items={[
             { id: 'all', label: 'All 30' },
-            { id: 'holdings', label: 'My Holdings' },
+            { id: 'holdings', label: `My Holdings (${userHoldings.length})` },
             { id: 'gainers', label: 'Gainers' },
             { id: 'losers', label: 'Losers' },
           ]}
@@ -93,8 +138,22 @@ export const HoldingsPage: React.FC = () => {
 
       {/* Stock List Items */}
       <div className="space-y-3">
+        {filteredTickers.length === 0 && !loading && (
+          <Card3D elevation="e1" className="p-8 text-center text-xs text-text-tertiary">
+            {activeTab === 'holdings'
+              ? 'You do not own any stocks yet. Click on any stock in "All 30" to place a virtual paper trade.'
+              : 'No stocks found matching your search query.'}
+          </Card3D>
+        )}
+
         {filteredTickers.map((item) => {
           const isUp = (item.change_pct ?? 0) >= 0;
+          const holding = holdingsMap.get(item.symbol);
+          const hasHolding = Boolean(holding && holding.quantity > 0);
+          const holdingPnl = hasHolding
+            ? (item.price - holding!.avg_price_paise / 100) * holding!.quantity
+            : 0;
+
           return (
             <Card3D
               key={item.symbol}
@@ -110,6 +169,11 @@ export const HoldingsPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-text-primary">{item.symbol}</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="ML Forecast Active" />
+                    {hasHolding && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-marigold-bg text-brand-marigold-text border border-brand-marigold/30">
+                        HOLDING ({holding!.quantity})
+                      </span>
+                    )}
                     <span className="text-[10px] text-text-tertiary px-1.5 py-0.5 rounded bg-surface-raised border border-surface-border">
                       {item.sector}
                     </span>
@@ -119,6 +183,22 @@ export const HoldingsPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between sm:justify-end gap-6">
+                {hasHolding && (
+                  <div className="text-left sm:text-right">
+                    <span className="text-[10px] text-text-tertiary uppercase block">Avg Buy Price</span>
+                    <span className="text-xs font-mono font-semibold text-text-secondary">
+                      ₹{(holding!.avg_price_paise / 100).toFixed(2)}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono block ${
+                        holdingPnl >= 0 ? 'text-brand-up' : 'text-brand-down'
+                      }`}
+                    >
+                      P&L: {holdingPnl >= 0 ? '+' : ''}₹{holdingPnl.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
                 <div className="text-right">
                   <span className="text-sm font-bold font-mono text-text-primary block">
                     ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -161,6 +241,7 @@ export const HoldingsPage: React.FC = () => {
           symbol={selectedStock}
           isOpen={!!selectedStock}
           onClose={() => setSelectedStock(null)}
+          onTradeSuccess={loadPortfolio}
         />
       )}
     </div>
