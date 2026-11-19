@@ -1,6 +1,7 @@
 import React, { useId, useState, useEffect, useRef } from 'react';
-import { MapPin, X, Check } from 'lucide-react';
+import { MapPin, X, Check, Loader2 } from 'lucide-react';
 import { getCityTrie, CityMatch } from '../../utils/cityTrie';
+import { hapticTick } from '../../utils/haptics';
 
 export interface CityAutocompleteProps {
   id?: string;
@@ -13,6 +14,56 @@ export interface CityAutocompleteProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+}
+
+/**
+ * Reverse-geocodes GPS coordinates into a city name using free, client-side APIs.
+ */
+async function reverseGeocodeCity(
+  latitude: number,
+  longitude: number
+): Promise<{ city: string; state?: string } | null> {
+  // 1. Try BigDataCloud free client reverse geocoding API
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const detectedCity = data.city || data.locality || data.principalSubdivision;
+      if (detectedCity) {
+        return {
+          city: detectedCity,
+          state: data.principalSubdivision,
+        };
+      }
+    }
+  } catch {
+    // Continue to fallback
+  }
+
+  // 2. Fallback to OpenStreetMap Nominatim
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const detectedCity =
+        addr.city || addr.town || addr.village || addr.county || addr.state_district;
+      if (detectedCity) {
+        return {
+          city: detectedCity,
+          state: addr.state,
+        };
+      }
+    }
+  } catch {
+    // Failed all reverse geocoding attempts
+  }
+
+  return null;
 }
 
 export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
@@ -34,6 +85,11 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
   const [suggestions, setSuggestions] = useState<CityMatch[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +119,7 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     const text = e.target.value;
     setInputValue(text);
     onChange(text);
+    setLocationMessage(null);
 
     if (text.trim().length >= 1) {
       const trie = getCityTrie();
@@ -83,6 +140,7 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     setIsOpen(false);
     setSuggestions([]);
     setHighlightedIndex(-1);
+    setLocationMessage(null);
     inputRef.current?.focus();
   };
 
@@ -92,7 +150,85 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
     setSuggestions([]);
     setIsOpen(false);
     setHighlightedIndex(-1);
+    setLocationMessage(null);
     inputRef.current?.focus();
+  };
+
+  // GPS Auto-detect via pin click
+  const handleLocateMe = () => {
+    if (disabled || isLocating) return;
+
+    setLocationMessage(null);
+
+    if (!('geolocation' in navigator) || !navigator.geolocation) {
+      setLocationMessage({
+        type: 'error',
+        text: 'Geolocation is not supported by your browser. Please type your city.',
+      });
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const result = await reverseGeocodeCity(latitude, longitude);
+
+          if (result && result.city) {
+            // Check if Trie has a canonical name for this city
+            const trie = getCityTrie();
+            const matches = trie.search(result.city, 1);
+            const canonicalCity =
+              matches.length > 0 &&
+              matches[0].city.toLowerCase() === result.city.toLowerCase()
+                ? matches[0].city
+                : result.city;
+
+            setInputValue(canonicalCity);
+            onChange(canonicalCity);
+            setIsOpen(false);
+            hapticTick();
+            setLocationMessage({
+              type: 'success',
+              text: `Detected: ${canonicalCity}${result.state ? ` (${result.state})` : ''}`,
+            });
+          } else {
+            setLocationMessage({
+              type: 'error',
+              text: 'Could not determine city name from GPS. Please type manually.',
+            });
+          }
+        } catch {
+          setLocationMessage({
+            type: 'error',
+            text: 'Location lookup failed. Please type manually.',
+          });
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationMessage({
+            type: 'error',
+            text: 'Location permission was denied. Please type your city manually.',
+          });
+        } else {
+          setLocationMessage({
+            type: 'error',
+            text: 'Unable to retrieve location coordinates. Please type manually.',
+          });
+        }
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 300000,
+      }
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -152,14 +288,22 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
   };
 
   return (
-    <div ref={containerRef} className={`relative w-full flex flex-col gap-1.5 text-left ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative w-full flex flex-col gap-1.5 text-left ${className}`}
+    >
       {label && (
-        <label
-          htmlFor={inputId}
-          className="text-xs font-semibold text-text-secondary tracking-wide select-none"
-        >
-          {label} {required && <span className="text-brand-down">*</span>}
-        </label>
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor={inputId}
+            className="text-xs font-semibold text-text-secondary tracking-wide select-none"
+          >
+            {label} {required && <span className="text-brand-down">*</span>}
+          </label>
+          <span className="text-[10px] text-text-tertiary">
+            Type or click 📍 to locate
+          </span>
+        </div>
       )}
 
       <div
@@ -170,17 +314,30 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         style={{ boxShadow: 'var(--shadow-inset)' }}
       >
-        <div className="pl-3.5 pr-1 text-text-tertiary select-none shrink-0">
-          <MapPin className="w-4 h-4 text-brand-marigold" />
-        </div>
+        {/* Clickable GPS Location Pin */}
+        <button
+          type="button"
+          onClick={handleLocateMe}
+          disabled={disabled || isLocating}
+          title="Click to auto-detect your city via GPS"
+          aria-label="Auto-detect current city via GPS"
+          className="pl-3.5 pr-1.5 py-1 text-brand-marigold hover:text-brand-marigold-hover focus:outline-none transition-transform active:scale-90 select-none shrink-0 cursor-pointer disabled:cursor-not-allowed"
+        >
+          {isLocating ? (
+            <Loader2 className="w-4 h-4 animate-spin text-brand-marigold" />
+          ) : (
+            <MapPin className="w-4 h-4 text-brand-marigold hover:scale-110 transition-transform" />
+          )}
+        </button>
 
+        {/* City Input for Manual Typing */}
         <input
           ref={inputRef}
           id={inputId}
           type="text"
           autoComplete="address-level2"
-          disabled={disabled}
-          placeholder={placeholder}
+          disabled={disabled || isLocating}
+          placeholder={isLocating ? 'Detecting your location...' : placeholder}
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
@@ -191,12 +348,13 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
               setIsOpen(matches.length > 0);
             }
           }}
-          className="w-full h-11 min-h-[44px] px-2.5 bg-transparent text-sm placeholder:text-text-tertiary outline-none disabled:cursor-not-allowed"
-          aria-label="City Autocomplete"
+          className="w-full h-11 min-h-[44px] px-2 bg-transparent text-sm placeholder:text-text-tertiary outline-none disabled:cursor-not-allowed"
+          aria-label="City Autocomplete or GPS location"
           aria-autocomplete="list"
           aria-expanded={isOpen}
         />
 
+        {/* Clear Button */}
         {inputValue.length > 0 && !disabled && (
           <button
             type="button"
@@ -221,7 +379,8 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
           </div>
           {suggestions.map((item, idx) => {
             const isSelected = idx === highlightedIndex;
-            const isCurrent = inputValue.trim().toLowerCase() === item.city.toLowerCase();
+            const isCurrent =
+              inputValue.trim().toLowerCase() === item.city.toLowerCase();
 
             return (
               <div
@@ -231,7 +390,9 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
                 onClick={() => handleSelect(item.city)}
                 onMouseEnter={() => setHighlightedIndex(idx)}
                 className={`px-3.5 py-2 cursor-pointer flex items-center justify-between transition-colors text-sm ${
-                  isSelected ? 'bg-surface-inset text-text-primary' : 'text-text-secondary hover:bg-surface-inset'
+                  isSelected
+                    ? 'bg-surface-inset text-text-primary'
+                    : 'text-text-secondary hover:bg-surface-inset'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -249,8 +410,24 @@ export const CityAutocomplete: React.FC<CityAutocompleteProps> = ({
         </div>
       )}
 
-      {error ? (
-        <p role="alert" className="text-xs text-brand-down font-medium flex items-center gap-1">
+      {/* Geolocation feedback / Error feedback */}
+      {locationMessage ? (
+        <p
+          role="status"
+          className={`text-xs font-medium flex items-center gap-1 ${
+            locationMessage.type === 'success' ? 'text-brand-up' : 'text-text-tertiary'
+          }`}
+        >
+          {locationMessage.type === 'success' && (
+            <Check className="w-3 h-3 text-brand-up" />
+          )}
+          {locationMessage.text}
+        </p>
+      ) : error ? (
+        <p
+          role="alert"
+          className="text-xs text-brand-down font-medium flex items-center gap-1"
+        >
           {error}
         </p>
       ) : helperText ? (

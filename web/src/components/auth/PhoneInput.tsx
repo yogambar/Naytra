@@ -119,7 +119,7 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           inputMode="numeric"
           autoComplete="tel-national"
           disabled={disabled}
-          placeholder="84399 02894"
+          placeholder="98765 43210"
           value={formatLocalDigits(digits)}
           onChange={handleChange}
           onBlur={() => setTouched(true)}

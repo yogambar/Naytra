@@ -60,9 +60,9 @@ describe('Authentication Utilities & Validation', () => {
 
   describe('Indian Phone Regex & +91 Default Validation', () => {
     it('accepts raw 10-digit number assuming India (+91) and normalizes', () => {
-      const res = validateIndianPhone('8439902894', true);
+      const res = validateIndianPhone('9876543210', true);
       expect(res.valid).toBe(true);
-      expect(res.normalized).toBe('+918439902894');
+      expect(res.normalized).toBe('+919876543210');
     });
 
     it('accepts +91 prefixed phone with spaces and normalizes', () => {
@@ -72,9 +72,9 @@ describe('Authentication Utilities & Validation', () => {
     });
 
     it('accepts 0-prefixed 10-digit mobile number and strips leading 0', () => {
-      const res = validateIndianPhone('08439902894', true);
+      const res = validateIndianPhone('09876543210', true);
       expect(res.valid).toBe(true);
-      expect(res.normalized).toBe('+918439902894');
+      expect(res.normalized).toBe('+919876543210');
     });
 
     it('allows empty phone when optional', () => {
@@ -102,10 +102,10 @@ describe('Authentication Utilities & Validation', () => {
     });
 
     it('extracts mobile digits and formats as XXXXX XXXXX', () => {
-      const extracted = extractIndianMobileDigits('+91 8439902894');
-      expect(extracted).toBe('8439902894');
+      const extracted = extractIndianMobileDigits('+91 9876543210');
+      expect(extracted).toBe('9876543210');
       const formatted = formatLocalDigits(extracted);
-      expect(formatted).toBe('84399 02894');
+      expect(formatted).toBe('98765 43210');
     });
   });
 

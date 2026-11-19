@@ -148,12 +148,12 @@ async def test_complete_profile_rejects_invalid_phone(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_complete_profile_normalizes_raw_indian_phone(client: AsyncClient):
-    """Raw 10-digit Indian phone (e.g. 8439902894) is normalized to +918439902894."""
+    """Raw 10-digit Indian phone (e.g. 9876543210) is normalized to +919876543210."""
     token = "mock-token:uid_norm_phone:normphone@example.com:true"
     payload = {
         "name": "Normal Phone",
         "dob": "1995-01-01",
-        "phone": "8439902894",
+        "phone": "9876543210",
         "city": "Dehradun",
         "terms_accepted": True,
     }
@@ -164,7 +164,7 @@ async def test_complete_profile_normalizes_raw_indian_phone(client: AsyncClient)
     )
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["phone"] == "+918439902894"
+    assert data["phone"] == "+919876543210"
     assert data["city"] == "Dehradun"
 
 
