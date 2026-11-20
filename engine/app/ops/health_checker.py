@@ -31,9 +31,11 @@ async def get_system_metrics() -> dict:
 
     cache_stats = await cache.get_stats()
     chart_summary = candle_store.export_summary()
+    market_info = settings.get_market_status()
 
     return {
         "status": "OPERATIONAL",
+        "market": market_info,
         "timestamp": datetime.now(tz=IST).isoformat(),
         "uptime": uptime_fmt,
         "uptime_seconds": uptime_sec,

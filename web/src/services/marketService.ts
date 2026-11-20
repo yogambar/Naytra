@@ -39,6 +39,12 @@ export interface CandleData {
 export interface ChartResponse {
   symbol: string;
   interval: string;
+  timeline?: string;
+  market?: {
+    is_open: boolean;
+    status_text: string;
+    current_time_ist: string;
+  };
   total_candles: number;
   actual_candles_count: number;
   forecast_candles_count: number;
@@ -165,9 +171,10 @@ export async function fetchMarketTickers(): Promise<MarketTicker[]> {
 export async function fetchStockChart(
   symbol: string,
   interval: string = '5m',
-  includeForecast: boolean = true
+  includeForecast: boolean = true,
+  timeline: string = '1D'
 ): Promise<ChartResponse | null> {
-  const cacheKey = `chart_${symbol}_${interval}_${includeForecast}`;
+  const cacheKey = `chart_${symbol}_${interval}_${timeline}_${includeForecast}`;
   const { data, isStale, etag } = getFromCache<ChartResponse>(cacheKey, 60);
 
   const fetchPromise = (async () => {
@@ -176,7 +183,7 @@ export async function fetchStockChart(
       if (etag) headers['If-None-Match'] = etag;
 
       const res = await fetch(
-        `${API_BASE}/api/v1/market/charts/${symbol}?interval=${interval}&include_forecast=${includeForecast}`,
+        `${API_BASE}/api/v1/market/charts/${symbol}?interval=${interval}&timeline=${timeline}&include_forecast=${includeForecast}`,
         { headers }
       );
       if (res.status === 304 && data) {

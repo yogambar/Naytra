@@ -3,51 +3,24 @@ import { Card3D } from '../design/Card3D';
 import { ThemeToggle } from '../design/ThemeToggle';
 import { DataModeBadge } from '../design/Badge';
 import { Button } from '../design/Button';
-import { Input } from '../design/Input';
 import { hapticTick } from '../utils/haptics';
-import { Smartphone, ExternalLink, Sliders, Palette, LogOut, CheckCircle2, AlertCircle, Trash2, User, Sparkles, MapPin, Phone } from 'lucide-react';
+import { Smartphone, ExternalLink, Sliders, Palette, LogOut, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { updateFirestoreUserProfile } from '../services/firestoreService';
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile, logout, deleteAccount } = useAuth();
+  const { user, profile, logout, deleteAccount } = useAuth();
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // Edit profile state
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(profile?.name || '');
-  const [editPhone, setEditPhone] = useState(profile?.phone || '');
-  const [editCity, setEditCity] = useState(profile?.city || '');
-  const [savingProfile, setSavingProfile] = useState(false);
 
   const toggleHaptics = () => {
     const next = !hapticsEnabled;
     setHapticsEnabled(next);
     if (next) {
       hapticTick();
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!user?.uid) return;
-    setSavingProfile(true);
-    try {
-      await updateFirestoreUserProfile(user.uid, {
-        name: editName.trim(),
-        phone: editPhone.trim(),
-        city: editCity.trim(),
-      });
-      await refreshProfile();
-      setIsEditing(false);
-    } catch {
-      alert('Failed to save profile updates.');
-    } finally {
-      setSavingProfile(false);
     }
   };
 
@@ -106,9 +79,6 @@ export const ProfilePage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-text-primary">{displayName}</h2>
-              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-950/60 text-purple-300 border border-purple-800/50">
-                @{profile?.username || 'trader'}
-              </span>
               <DataModeBadge mode="REPLAY" />
             </div>
             <p className="text-xs text-text-secondary mt-0.5 font-mono">
@@ -138,72 +108,6 @@ export const ProfilePage: React.FC = () => {
             Status Page
           </Button>
         </Link>
-      </Card3D>
-
-      {/* User Details & Contact Info (Editable) */}
-      <Card3D elevation="e2" className="p-5 space-y-4">
-        <div className="flex items-center justify-between border-b border-surface-border pb-3">
-          <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
-            <User className="w-4 h-4 text-brand-marigold" />
-            Personal Details & Location
-          </div>
-          {!isEditing ? (
-            <Button variant="secondary" size="sm" onClick={() => setIsEditing(true)}>
-              Edit Details
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="sm" loading={savingProfile} onClick={handleSaveProfile}>
-                Save Changes
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {!isEditing ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="p-3 rounded-xl bg-surface-inset border border-surface-border">
-              <span className="text-[10px] text-text-tertiary uppercase block">Registered Phone</span>
-              <div className="flex items-center gap-1.5 mt-1 font-mono font-semibold text-text-primary">
-                <Phone className="w-3.5 h-3.5 text-text-tertiary" />
-                {profile?.phone || 'Not added'}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-surface-inset border border-surface-border">
-              <span className="text-[10px] text-text-tertiary uppercase block">Trading City</span>
-              <div className="flex items-center gap-1.5 mt-1 font-semibold text-text-primary">
-                <MapPin className="w-3.5 h-3.5 text-text-tertiary" />
-                {profile?.city || 'Not specified'}
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-surface-inset border border-surface-border">
-              <span className="text-[10px] text-text-tertiary uppercase block">Date of Birth</span>
-              <div className="mt-1 font-mono font-semibold text-text-primary">
-                {profile?.dob || 'Not specified'}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">Full Name</label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">Phone (+91)</label>
-              <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+91 9876543210" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-text-secondary block mb-1">City</label>
-              <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} placeholder="e.g. Mumbai" />
-            </div>
-          </div>
-        )}
       </Card3D>
 
       {/* App Appearance Settings */}
@@ -273,23 +177,7 @@ export const ProfilePage: React.FC = () => {
           Developer & Design Quick Links
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <a
-            href="http://localhost:8001/console"
-            target="_blank"
-            rel="noreferrer"
-            className="p-3 rounded-xl bg-purple-950/20 border border-purple-800/40 hover:border-purple-500 transition-colors flex items-center justify-between"
-          >
-            <div>
-              <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5 block">
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                Backend Ops Console
-              </span>
-              <span className="text-[11px] text-text-tertiary">Live ML models, Gemini tokens & API health</span>
-            </div>
-            <ExternalLink className="w-4 h-4 text-purple-400" />
-          </a>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <Link
             to="/design"
             className="p-3 rounded-xl bg-surface-inset border border-surface-border hover:border-brand-marigold/40 transition-colors flex items-center justify-between"

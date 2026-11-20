@@ -77,8 +77,8 @@ async def lifespan(app: FastAPI):
     logger.info("Generating initial ML purple forecast candles...")
     predictor.run_all_forecasts()
 
-    # 5. Fetch initial news
-    asyncio.create_task(market_worker.fetch_marketaux_news())
+    # 5. Fetch initial news (await to ensure ready before first request)
+    await market_worker.fetch_marketaux_news()
 
     # 6. Configure APScheduler
     scheduler.add_job(

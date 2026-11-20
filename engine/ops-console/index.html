@@ -6,8 +6,6 @@
   <title>Naytra — Backend Engineer Ops Console</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -15,12 +13,9 @@
         extend: {
           colors: {
             brand: {
-              50: '#f5f3ff',
-              500: '#8b5cf6',
-              600: '#7c3aed',
-              forecast: '#8A2BE2', // Purple forecast color
-              bullish: '#00C805',  // Green actual color
-              bearish: '#FF3B30',  // Red actual color
+              forecast: '#8A2BE2',
+              bullish: '#00C805',
+              bearish: '#FF3B30',
             }
           }
         }
@@ -44,15 +39,19 @@
       background: #374151;
       border-radius: 3px;
     }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 8px rgba(138, 43, 226, 0.4); opacity: 0.85; }
+      50% { box-shadow: 0 0 20px rgba(138, 43, 226, 0.9); opacity: 1; }
+    }
     .glow-purple {
-      box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
+      animation: pulse-glow 2s infinite ease-in-out;
     }
   </style>
 </head>
 <body class="min-h-screen flex flex-col custom-scrollbar">
 
   <!-- Top Navigation Bar -->
-  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur px-6 py-3 flex items-center justify-between sticky top-0 z-40">
     <div class="flex items-center space-x-4">
       <div class="flex items-center space-x-2">
         <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg">
@@ -66,9 +65,10 @@
         </div>
       </div>
 
-      <div class="hidden md:flex items-center space-x-2 pl-6 border-l border-gray-800">
-        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800/60 animate-pulse">
-          <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full"></span> SYSTEM ONLINE
+      <!-- Indian Market Hours Badge -->
+      <div class="hidden md:flex items-center space-x-3 pl-6 border-l border-gray-800">
+        <span id="market-status-pill" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border transition">
+          <span class="w-2 h-2 mr-1.5 rounded-full animate-ping"></span> CHECKING MARKET...
         </span>
         <span id="uptime-badge" class="text-xs text-gray-400 font-mono">Uptime: 0h 0m</span>
       </div>
@@ -103,8 +103,8 @@
       </div>
       <div class="text-lg font-bold text-white mb-1" id="model-name">Naytra-LSTM-V1-Hybrid</div>
       <div class="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-800">
-        <div>Latency: <span class="text-white font-mono" id="model-latency">12.4ms</span></div>
-        <div>Inferences: <span class="text-white font-mono" id="model-inferences">0</span></div>
+        <div>Latency: <span class="text-white font-mono" id="model-latency">0.91ms</span></div>
+        <div>Inferences: <span class="text-white font-mono" id="model-inferences">30</span></div>
         <div>RMSE: <span class="text-white font-mono" id="model-rmse">0.0034</span></div>
         <div>Checkpoint: <span class="text-purple-400 font-mono" id="model-ckpt">v1.2.4</span></div>
       </div>
@@ -125,11 +125,11 @@
       </div>
     </div>
 
-    <!-- Card 3: External API Keys -->
+    <!-- Card 3: External API Quotas -->
     <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">External API Quotas</span>
-        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-800/50">ACTIVE</span>
+        <span id="api-rate-limit-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-950 text-blue-400 border border-blue-800/50">PROTECTED</span>
       </div>
       <div class="space-y-2 text-xs mt-2">
         <div class="flex justify-between items-center">
@@ -154,7 +154,7 @@
     <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 shadow-sm">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Cache & System Load</span>
-        <span id="cache-mode-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-400 border border-purple-800/50">REDIS L2</span>
+        <span id="cache-mode-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-950 text-purple-400 border border-purple-800/50">IN-MEMORY</span>
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-2">
         <div>Cache Hit Rate: <span class="text-emerald-400 font-mono font-bold" id="cache-hit-rate">100%</span></div>
@@ -175,12 +175,11 @@
         <input id="ticker-search" type="text" placeholder="Search..." oninput="filterTickers()" class="bg-gray-800 text-xs text-white px-2 py-1 rounded border border-gray-700 w-28 focus:outline-none focus:border-purple-500">
       </div>
       <div id="ticker-list" class="flex-1 overflow-y-auto custom-scrollbar divide-y divide-gray-800/50 max-h-[620px]">
-        <!-- Tickers dynamically injected here -->
         <div class="p-4 text-center text-gray-500 text-xs">Loading market constituents...</div>
       </div>
     </div>
 
-    <!-- Center Column: Candlestick Chart (Green/Red Actuals + Purple Forecasts) -->
+    <!-- Center Column: Candlestick Chart (Timeline: 1D, 1W, 1M, 1Y, 5Y) -->
     <div class="col-span-12 lg:col-span-6 bg-gray-900/70 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
       <!-- Chart Controls Header -->
       <div class="p-3 border-b border-gray-800 bg-gray-900/90 flex flex-wrap items-center justify-between gap-2">
@@ -190,25 +189,28 @@
           <span class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700" id="selected-sector-title">Energy</span>
         </div>
 
-        <!-- Timeframe & Forecast Toggle -->
-        <div class="flex items-center space-x-2">
+        <!-- Timeline: 1D, 1W, 1M, 1Y, 5Y -->
+        <div class="flex items-center space-x-3">
           <div class="inline-flex rounded-md shadow-sm">
-            <button onclick="setChartInterval('1m')" class="interval-btn text-xs px-2.5 py-1 rounded-l border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="1m">1m</button>
-            <button onclick="setChartInterval('5m')" class="interval-btn text-xs px-2.5 py-1 border-t border-b border-gray-700 bg-purple-900/60 text-purple-200 font-bold" data-interval="5m">5m</button>
-            <button onclick="setChartInterval('15m')" class="interval-btn text-xs px-2.5 py-1 border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="15m">15m</button>
-            <button onclick="setChartInterval('1D')" class="interval-btn text-xs px-2.5 py-1 rounded-r border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-interval="1D">1D</button>
+            <button onclick="setTimeline('1D')" class="timeline-btn text-xs px-3 py-1 rounded-l border border-gray-700 bg-purple-900/60 text-purple-200 font-bold" data-timeline="1D">1D</button>
+            <button onclick="setTimeline('1W')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1W">1W</button>
+            <button onclick="setTimeline('1M')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1M">1M</button>
+            <button onclick="setTimeline('1Y')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1Y">1Y</button>
+            <button onclick="setTimeline('5Y')" class="timeline-btn text-xs px-3 py-1 rounded-r border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="5Y">5Y</button>
           </div>
 
-          <label class="flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2 py-1 rounded border border-purple-800/40">
-            <input type="checkbox" id="toggle-forecast" checked onchange="loadChartData()" class="rounded bg-gray-800 border-gray-700 text-purple-600 focus:ring-0">
-            <span>Purple Forecasts (#8A2BE2)</span>
-          </label>
+          <!-- Forecast Toggle (Only active on 1D) -->
+          <div id="forecast-toggle-container" class="flex items-center">
+            <label class="flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2.5 py-1 rounded border border-purple-800/40 hover:border-purple-600 transition">
+              <input type="checkbox" id="toggle-forecast" checked onchange="loadChartData()" class="rounded bg-gray-800 border-gray-700 text-purple-600 focus:ring-0">
+              <span class="font-semibold">Purple Forecast (#8A2BE2)</span>
+            </label>
+          </div>
         </div>
       </div>
 
       <!-- Chart Canvas Viewport -->
-      <div class="flex-1 p-4 relative min-h-[440px] flex flex-col justify-center bg-gray-950/40">
-        <!-- Interactive HTML5 Canvas Candlestick Chart -->
+      <div class="flex-1 p-4 relative min-h-[440px] flex flex-col justify-center bg-gray-950/40 overflow-hidden">
         <canvas id="candleCanvas" class="w-full h-full block"></canvas>
         <div id="chart-tooltip" class="hidden absolute pointer-events-none bg-gray-900/95 border border-purple-500/50 rounded-lg p-2.5 text-xs text-white shadow-2xl z-20 backdrop-blur"></div>
       </div>
@@ -218,7 +220,7 @@
         <div class="flex items-center space-x-4">
           <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#00C805]"></span> Bullish Actual</span>
           <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#FF3B30]"></span> Bearish Actual</span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#8A2BE2] shadow-[0_0_8px_#8A2BE2]"></span> ML Purple Forecast (Rest of Today)</span>
+          <span id="forecast-legend-pill" class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#8A2BE2] shadow-[0_0_8px_#8A2BE2]"></span> ML Purple Forecast (Rest of Today • Glowing)</span>
         </div>
         <div id="chart-stats" class="font-mono text-gray-400">
           Actual: <span id="actual-count-stat" class="text-white">--</span> | Forecast: <span id="forecast-count-stat" class="text-purple-400">--</span>
@@ -226,7 +228,7 @@
       </div>
     </div>
 
-    <!-- Right Column: LLM Reasoning & News -->
+    <!-- Right Column: LLM Reasoning & Indian News -->
     <div class="col-span-12 lg:col-span-3 flex flex-col space-y-4">
 
       <!-- LLM Reasoning Card -->
@@ -242,7 +244,7 @@
         <!-- Target & Confidence -->
         <div class="grid grid-cols-2 gap-2 mb-3 bg-gray-950/60 p-2.5 rounded-lg border border-gray-800/60 text-xs">
           <div>
-            <div class="text-gray-400 text-[10px]">ML Forecast Target</div>
+            <div class="text-gray-400 text-[10px]">Today's Session Target</div>
             <div class="text-base font-bold text-purple-400 font-mono" id="insight-target-price">₹--</div>
           </div>
           <div>
@@ -265,17 +267,21 @@
 
         <!-- Educational Rationale -->
         <div class="bg-gray-800/40 p-3 rounded-lg border border-gray-700/50 text-xs text-gray-300 leading-relaxed" id="insight-summary">
-          Loading market causal synthesis from Gemini 2.5 Flash...
+          Synthesizing causal drivers from Gemini 2.5 Flash...
         </div>
       </div>
 
-      <!-- Financial News Feed -->
-      <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 flex-1 flex flex-col overflow-hidden max-h-[300px]">
+      <!-- Indian Financial News Feed (With Quick Summary & Clickable Popover) -->
+      <div class="bg-gray-900/70 border border-gray-800 rounded-xl p-4 flex-1 flex flex-col overflow-hidden max-h-[380px]">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Marketaux Indian News</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-gray-300">Indian Market News</span>
+            <span class="text-[10px] px-1.5 py-0.2 rounded bg-gray-800 text-gray-400 border border-gray-700">Today</span>
+          </div>
           <span class="text-[10px] text-gray-500 font-mono" id="news-count">0 items</span>
         </div>
-        <div id="news-feed" class="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 text-xs divide-y divide-gray-800/40">
+        <p class="text-[11px] text-gray-400 mb-2">Click any article to open detailed summary & original source.</p>
+        <div id="news-feed" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 text-xs divide-y divide-gray-800/50">
           <div class="text-gray-500 text-center py-4">Ingesting financial headlines...</div>
         </div>
       </div>
@@ -283,12 +289,41 @@
     </div>
   </div>
 
+  <!-- News Article Detail Popover / Modal -->
+  <div id="news-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button onclick="closeNewsModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+
+      <div class="flex items-center gap-2 mb-2">
+        <span id="modal-news-source" class="text-xs font-bold px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800/60">Source</span>
+        <span id="modal-news-time" class="text-xs text-gray-400">Time</span>
+      </div>
+
+      <h3 id="modal-news-title" class="text-base font-bold text-white mb-3 leading-snug">Article Title</h3>
+
+      <div class="bg-gray-800/60 p-3 rounded-xl border border-gray-700/60 mb-4 text-xs text-gray-300 leading-relaxed" id="modal-news-summary">
+        Summary description goes here...
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-gray-800">
+        <span class="text-[11px] text-gray-500">Live Indian Financial Feed</span>
+        <a id="modal-news-link" href="#" target="_blank" class="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-950/60 px-3 py-1.5 rounded-lg border border-purple-800/60 hover:border-purple-600 transition">
+          <span>Read on Original Website</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript Client Logic -->
   <script>
     let currentSymbol = 'RELIANCE';
-    let currentInterval = '5m';
+    let currentTimeline = '1D';
     let allTickers = [];
     let currentCandles = [];
+    let cachedNews = [];
 
     // Canvas Chart Setup
     const canvas = document.getElementById('candleCanvas');
@@ -299,16 +334,34 @@
       const rect = canvas.parentElement.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
-      drawChart();
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // Fetch System Health
+    // Continuous Animation Loop for Pulsing Purple Candles
+    let animPhase = 0;
+    function renderLoop() {
+      animPhase += 0.05;
+      drawChart();
+      requestAnimationFrame(renderLoop);
+    }
+
+    // Fetch System & Market Health
     async function fetchHealth() {
       try {
         const res = await fetch('/ops/health');
         if (!res.ok) return;
         const data = await res.json();
+
+        // Market Status Pill
+        const m = data.market;
+        const pill = document.getElementById('market-status-pill');
+        if (m.is_open) {
+          pill.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60";
+          pill.innerHTML = `<span class="w-2 h-2 mr-1.5 bg-emerald-400 rounded-full animate-ping"></span> ${m.status_text}`;
+        } else {
+          pill.className = "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-rose-950 text-rose-400 border border-rose-800/60";
+          pill.innerHTML = `<span class="w-2 h-2 mr-1.5 bg-rose-400 rounded-full"></span> ${m.status_text}`;
+        }
 
         // Uptime & System
         document.getElementById('uptime-badge').textContent = `Uptime: ${data.uptime}`;
@@ -364,13 +417,16 @@
       container.innerHTML = '';
       list.forEach(t => {
         const isSelected = t.symbol === currentSymbol;
-        const isUp = t.change >= 0;
+        const isUp = (t.change ?? 0) >= 0;
         const div = document.createElement('div');
         div.className = `p-3 flex items-center justify-between cursor-pointer transition hover:bg-gray-800/80 ${isSelected ? 'bg-purple-950/40 border-l-4 border-purple-500' : ''}`;
         div.onclick = () => selectTicker(t.symbol);
         div.innerHTML = `
           <div>
-            <div class="font-bold text-xs text-white">${t.symbol}</div>
+            <div class="font-bold text-xs text-white flex items-center gap-1.5">
+              ${t.symbol}
+              <span class="w-1.5 h-1.5 rounded-full bg-purple-500" title="ML Forecast Active"></span>
+            </div>
             <div class="text-[10px] text-gray-400 truncate max-w-[120px]">${t.name}</div>
           </div>
           <div class="text-right">
@@ -401,36 +457,48 @@
       loadInsight();
     }
 
-    function setChartInterval(intVal) {
-      currentInterval = intVal;
-      document.querySelectorAll('.interval-btn').forEach(b => {
-        if (b.dataset.interval === intVal) {
-          b.className = 'interval-btn text-xs px-2.5 py-1 bg-purple-900/60 text-purple-200 font-bold border border-gray-700';
+    // Timeline Selector (1d, 1w, 1m, 1y, 5y)
+    function setTimeline(tl) {
+      currentTimeline = tl;
+      document.querySelectorAll('.timeline-btn').forEach(b => {
+        if (b.dataset.timeline === tl) {
+          b.className = 'timeline-btn text-xs px-3 py-1 bg-purple-900/60 text-purple-200 font-bold border border-gray-700';
         } else {
-          b.className = 'interval-btn text-xs px-2.5 py-1 bg-gray-800 text-gray-400 hover:text-white border border-gray-700';
+          b.className = 'timeline-btn text-xs px-3 py-1 bg-gray-800 text-gray-400 hover:text-white border border-gray-700';
         }
       });
+
+      // Prediction toggle only enabled on 1D
+      const toggleContainer = document.getElementById('forecast-toggle-container');
+      const forecastLegend = document.getElementById('forecast-legend-pill');
+      if (tl === '1D') {
+        toggleContainer.style.display = 'flex';
+        forecastLegend.style.display = 'flex';
+      } else {
+        toggleContainer.style.display = 'none';
+        forecastLegend.style.display = 'none';
+      }
+
       loadChartData();
     }
 
-    // Fetch and Draw Chart
+    // Fetch and Load Chart Data
     async function loadChartData() {
-      const incFc = document.getElementById('toggle-forecast').checked;
+      const incFc = (currentTimeline === '1D') && document.getElementById('toggle-forecast').checked;
       try {
-        const res = await fetch(`/api/v1/market/charts/${currentSymbol}?interval=${currentInterval}&include_forecast=${incFc}`);
+        const res = await fetch(`/api/v1/market/charts/${currentSymbol}?timeline=${currentTimeline}&include_forecast=${incFc}`);
         if (!res.ok) return;
         const data = await res.json();
         currentCandles = data.candles;
 
         document.getElementById('actual-count-stat').textContent = data.actual_candles_count;
         document.getElementById('forecast-count-stat').textContent = data.forecast_candles_count;
-
-        drawChart();
       } catch (err) {
         console.error("Chart data error:", err);
       }
     }
 
+    // Draw Candlesticks with Pulsing Glow Animation on Forecasts
     function drawChart() {
       if (!currentCandles || currentCandles.length === 0) return;
 
@@ -445,7 +513,6 @@
       const chartW = w - paddingLeft - paddingRight;
       const chartH = h - paddingTop - paddingBottom;
 
-      // Find min and max price across candles
       let minPrice = Infinity;
       let maxPrice = -Infinity;
 
@@ -457,7 +524,7 @@
       });
 
       const priceRange = (maxPrice - minPrice) || 1;
-      const pad = priceRange * 0.05;
+      const pad = priceRange * 0.08;
       const yMin = minPrice - pad;
       const yMax = maxPrice + pad;
       const totalYRange = yMax - yMin;
@@ -466,7 +533,7 @@
         return paddingTop + chartH - ((p - yMin) / totalYRange) * chartH;
       }
 
-      // Draw Grid Lines
+      // Grid Lines
       ctx.strokeStyle = '#1e293b';
       ctx.lineWidth = 1;
       const gridSteps = 5;
@@ -483,9 +550,10 @@
         ctx.fillText(`₹${pVal.toFixed(1)}`, w - paddingRight + 6, y + 3);
       }
 
-      // Draw Candlesticks
+      // Pulsing Breathing Glow factor for Purple Candles
+      const pulseBlur = 4 + 5 * Math.abs(Math.sin(animPhase));
       const candleCount = currentCandles.length;
-      const candleW = Math.max(3, (chartW / candleCount) * 0.75);
+      const candleW = Math.max(3, (chartW / candleCount) * 0.72);
       const stepX = chartW / candleCount;
 
       currentCandles.forEach((c, i) => {
@@ -496,13 +564,13 @@
         const yLow = priceToY(c.low);
 
         const isForecast = c.is_forecast;
-        let candleColor = c.color;
+        const candleColor = c.color;
 
-        // Render confidence interval envelope for forecast
+        // Confidence Envelope
         if (isForecast && c.upper_bound && c.lower_bound) {
           const yUp = priceToY(c.upper_bound);
           const yDown = priceToY(c.lower_bound);
-          ctx.fillStyle = 'rgba(138, 43, 226, 0.08)';
+          ctx.fillStyle = 'rgba(138, 43, 226, 0.09)';
           ctx.fillRect(x - (stepX/2), yUp, stepX, yDown - yUp);
         }
 
@@ -520,23 +588,21 @@
 
         ctx.fillStyle = candleColor;
         if (isForecast) {
-          // Glow effect on purple forecast candles
+          // Dynamic Continuous Glow Animation
           ctx.shadowColor = '#8A2BE2';
-          ctx.shadowBlur = 6;
+          ctx.shadowBlur = pulseBlur;
           ctx.fillRect(x - (candleW / 2), topY, candleW, bodyH);
-          ctx.shadowBlur = 0; // reset
+          ctx.shadowBlur = 0; // reset shadow
         } else {
           ctx.fillRect(x - (candleW / 2), topY, candleW, bodyH);
         }
 
-        // Store screen coordinates for hover tooltip
         c._screenX = x;
         c._screenY = topY;
-        c._width = candleW;
       });
     }
 
-    // Interactive Tooltip Hover
+    // Tooltip Hover
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -600,36 +666,56 @@
       }
     }
 
-    // Fetch News
+    // Fetch News with Popover Modal Support
     async function loadNews() {
       try {
         const res = await fetch('/ops/news');
         if (!res.ok) return;
         const data = await res.json();
+        cachedNews = data.articles;
         const container = document.getElementById('news-feed');
         document.getElementById('news-count').textContent = `${data.count} items`;
 
-        if (data.articles.length === 0) {
+        if (cachedNews.length === 0) {
           container.innerHTML = '<div class="text-gray-500 text-center py-4">No recent articles.</div>';
           return;
         }
 
         container.innerHTML = '';
-        data.articles.forEach(a => {
+        cachedNews.forEach((a, idx) => {
           const div = document.createElement('div');
-          div.className = 'pt-2';
+          div.className = 'pt-2.5 pb-2 cursor-pointer hover:bg-gray-800/40 px-2 rounded-lg transition';
+          div.onclick = () => openNewsModal(idx);
           div.innerHTML = `
-            <a href="${a.url}" target="_blank" class="font-semibold text-gray-200 hover:text-purple-400 transition block truncate">${a.title}</a>
-            <div class="flex items-center justify-between text-[10px] text-gray-500 mt-1">
-              <span>${a.source || 'Marketaux'}</span>
-              <span>${new Date(a.published_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <div class="flex items-center justify-between text-[10px] mb-1">
+              <span class="font-bold text-purple-400">${a.source || 'Financial Media'}</span>
+              <span class="text-gray-500">${new Date(a.published_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
             </div>
+            <div class="font-semibold text-gray-200 line-clamp-2 hover:text-purple-300 transition leading-snug">${a.title}</div>
+            <div class="text-[11px] text-gray-400 line-clamp-1 mt-1">${a.summary || a.description || ''}</div>
           `;
           container.appendChild(div);
         });
       } catch (err) {
         console.error("News error:", err);
       }
+    }
+
+    function openNewsModal(idx) {
+      const item = cachedNews[idx];
+      if (!item) return;
+
+      document.getElementById('modal-news-source').textContent = item.source || 'Financial News';
+      document.getElementById('modal-news-time').textContent = new Date(item.published_at).toLocaleString();
+      document.getElementById('modal-news-title').textContent = item.title;
+      document.getElementById('modal-news-summary').textContent = item.summary || item.description || 'No extended summary provided.';
+      document.getElementById('modal-news-link').href = item.url || '#';
+
+      document.getElementById('news-modal').classList.remove('hidden');
+    }
+
+    function closeNewsModal() {
+      document.getElementById('news-modal').classList.add('hidden');
     }
 
     // Ops Trigger Actions
@@ -650,10 +736,10 @@
     async function clearCache() {
       await fetch('/ops/clear-cache', {method: 'POST'});
       await fetchHealth();
-      alert("Redis & In-Memory cache cleared.");
+      alert("Cache cleared.");
     }
 
-    // Initialize Dashboard
+    // Auto-Reload & Initialization
     window.addEventListener('load', async () => {
       resizeCanvas();
       await fetchHealth();
@@ -662,10 +748,14 @@
       await loadInsight();
       await loadNews();
 
-      // Poll intervals
+      // Start continuous animation loop for glow
+      renderLoop();
+
+      // Auto-reloading loops without user having to reload the browser!
       setInterval(fetchHealth, 5000);
-      setInterval(loadChartData, 10000);
-      setInterval(loadTickers, 15000);
+      setInterval(loadChartData, 8000);   // replaces purple candles smoothly as real ticks arrive
+      setInterval(loadTickers, 12000);
+      setInterval(loadNews, 30000);
     });
   </script>
 </body>

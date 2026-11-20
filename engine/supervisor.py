@@ -76,7 +76,7 @@ class ProcessSupervisor:
         return proc
 
     def perform_backup(self):
-        """Creates snapshot backup of checkpoints and historical charts."""
+        """Creates snapshot backup of checkpoints and historical charts (excludes backups dir)."""
         today_str = datetime.now().strftime("%Y-%m-%d")
         if self.last_backup_day == today_str:
             return
@@ -85,7 +85,12 @@ class ProcessSupervisor:
         source_data = os.path.join(ENGINE_DIR, "data")
         try:
             if os.path.exists(source_data):
-                shutil.copytree(source_data, target_folder, dirs_exist_ok=True)
+                shutil.copytree(
+                    source_data,
+                    target_folder,
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("backups"),
+                )
                 logger.info("Created daily automated backup at %s", target_folder)
                 self.last_backup_day = today_str
         except Exception as e:

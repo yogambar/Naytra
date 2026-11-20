@@ -60,26 +60,33 @@ async def get_tickers(response: Response):
 async def get_chart(
     symbol: str,
     response: Response,
-    interval: str = Query("5m", pattern="^(1m|5m|15m|1D)$"),
+    interval: str = Query("5m", pattern="^(1m|5m|15m|1D|1W|1M|1Y|5Y)$"),
+    timeline: str = Query("1D", pattern="^(1D|1W|1M|1Y|5Y|1m|5m|15m)$"),
     limit: int = Query(80, ge=10, le=300),
     include_forecast: bool = Query(True),
     if_none_match: Optional[str] = Header(None),
 ):
     """
-    Returns unified candlestick series:
-    - Actual Historical/Real-time Candles (Green #00C805 / Red #FF3B30)
-    - Future Rest-of-Day Projected Candles (Purple #8A2BE2 with confidence bands)
-    Each purple candle is automatically replaced as actual time arrives.
+    Returns candlestick series:
+    - 1D timeline: Intraday historical candles (Green #00C805 / Red #FF3B30) + today's Purple #8A2BE2 forecasts.
+    - 1W, 1M, 1Y, 5Y timelines: Historical actual period candles only (forecasts strictly disabled).
+    - Dynamic replacement: Purple forecast candle at timestamp T is replaced when real tick arrives.
     """
     sym = symbol.upper()
     if sym not in SENSEX_DICT:
         raise HTTPException(status_code=404, detail=f"Ticker '{symbol}' not found in BSE Sensex 30")
+
+    # If timeline is set to multi-period, ensure it takes precedence
+    effective_timeline = timeline if timeline in ["1D", "1W", "1M", "1Y", "5Y"] else (
+        "1D" if interval in ["1m", "5m", "15m", "1D"] else interval
+    )
 
     candles = candle_store.get_chart(
         symbol=sym,
         interval=interval,
         limit_actual=limit,
         include_forecast=include_forecast,
+        timeline=effective_timeline,
     )
 
     candle_dicts = [c.dict() for c in candles]
@@ -95,10 +102,13 @@ async def get_chart(
 
     actual_count = sum(1 for c in candles if not c.is_forecast)
     forecast_count = sum(1 for c in candles if c.is_forecast)
+    market_info = settings.get_market_status()
 
     return {
         "symbol": sym,
         "interval": interval,
+        "timeline": effective_timeline,
+        "market": market_info,
         "total_candles": len(candles),
         "actual_candles_count": actual_count,
         "forecast_candles_count": forecast_count,

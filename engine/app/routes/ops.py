@@ -59,6 +59,13 @@ async def trigger_ingest():
     return {"status": "SUCCESS", "message": "Ingestion cycle executed"}
 
 
+@ops_router.post("/trigger-news")
+async def trigger_news():
+    """Forces an immediate news re-fetch (Marketaux or curated fallback)."""
+    articles = await market_worker.fetch_marketaux_news()
+    return {"status": "SUCCESS", "count": len(articles), "message": f"Fetched {len(articles)} news articles"}
+
+
 @ops_router.post("/clear-cache")
 async def clear_cache():
     """Clears in-memory and Redis caches."""

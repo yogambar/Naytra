@@ -152,11 +152,11 @@ class CandlePredictor:
         features = np.hstack([features, pad])
         return features
 
-    def calculate_remaining_intervals(self, interval_min: int = 5) -> List[int]:
+    def calculate_remaining_intervals(self, interval_min: int = 15) -> List[int]:
         """
         Calculates future timestamp boundaries for the rest of today's market session
         up to 15:30 IST (Indian Market Close).
-        If market has already closed today, forecasts for tomorrow's trading session.
+        Limits horizon to max 12 intervals for sharp, realistic intraday predictions.
         """
         now = datetime.now(tz=IST)
         close_today = now.replace(
@@ -166,9 +166,12 @@ class CandlePredictor:
             microsecond=0,
         )
 
-        # If current time is after market close or before open
-        if now >= close_today:
-            # Plan for tomorrow (or next session)
+        curr_time_min = now.hour * 60 + now.minute
+        open_time_min = settings.MARKET_OPEN_HOUR * 60 + settings.MARKET_OPEN_MINUTE
+        close_time_min = settings.MARKET_CLOSE_HOUR * 60 + settings.MARKET_CLOSE_MINUTE
+
+        if curr_time_min >= close_time_min:
+            # Market closed for today: target next trading session
             target_start = (now + timedelta(days=1)).replace(
                 hour=settings.MARKET_OPEN_HOUR,
                 minute=settings.MARKET_OPEN_MINUTE,
@@ -179,7 +182,8 @@ class CandlePredictor:
                 hour=settings.MARKET_CLOSE_HOUR,
                 minute=settings.MARKET_CLOSE_MINUTE,
             )
-        elif now.hour < settings.MARKET_OPEN_HOUR or (now.hour == 9 and now.minute < 15):
+        elif curr_time_min < open_time_min:
+            # Pre-market: today from 09:15 to 15:30
             target_start = now.replace(
                 hour=settings.MARKET_OPEN_HOUR,
                 minute=settings.MARKET_OPEN_MINUTE,
@@ -188,28 +192,24 @@ class CandlePredictor:
             )
             target_end = close_today
         else:
-            # During market hours: from next interval up to close
+            # During market hours: from next interval boundary to 15:30 IST
             curr_epoch = int(now.timestamp())
             interval_sec = interval_min * 60
             next_boundary = curr_epoch + (interval_sec - (curr_epoch % interval_sec))
             target_start = datetime.fromtimestamp(next_boundary, tz=IST)
             target_end = close_today
 
-        # Generate timestamps
         timestamps = []
         curr = target_start
         step = timedelta(minutes=interval_min)
-        # Cap at maximum 30 intervals to maintain high predictive power
-        count = 0
-        while curr <= target_end and count < 30:
+        # Cap at 10-14 intraday candles for realistic today forecast
+        while curr <= target_end and len(timestamps) < 12:
             timestamps.append(int(curr.timestamp()))
             curr += step
-            count += 1
 
         if not timestamps:
-            # Fallback if too close to close: next 6 intervals
             curr = now + timedelta(minutes=interval_min)
-            for _ in range(6):
+            for _ in range(8):
                 timestamps.append(int(curr.timestamp()))
                 curr += timedelta(minutes=interval_min)
 
@@ -218,66 +218,67 @@ class CandlePredictor:
     def forecast_rest_of_day(self, symbol: str, interval: str = "5m") -> List[Candle]:
         """
         Runs ML inference to project remaining candles of today's session.
+        Uses mean-reverting bounded simulation to prevent runaway price cascades.
         Returns list of Purple (#8A2BE2) Candle objects.
         """
         start_t = time.perf_counter()
 
-        # Retrieve historical candles
+        # Retrieve historical actual candles
         candles = candle_store.get_chart(symbol, interval=interval, limit_actual=40, include_forecast=False)
         if len(candles) < 5:
-            # Synthesize minimal seed if chart store is fresh
             seed_c = candle_store.get_latest_candle(symbol, interval)
             if not seed_c:
                 seed_c = Candle.create_actual(int(time.time()), 1000.0, 1005.0, 995.0, 1002.0, 10000)
-            candles = [seed_c] * 10
+            candles = [seed_c] * 8
 
         last_candle = candles[-1]
         last_price = last_candle.close
 
-        # Extract features and convert to PyTorch Tensor
+        # Compute technical features
         feat_matrix = self._compute_technical_features(candles)
-        # Take last 15 steps as sequence
         seq_len = min(15, feat_matrix.shape[0])
         seq = feat_matrix[-seq_len:, :]
         input_tensor = torch.tensor(seq, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-        # Run inference
         with torch.no_grad():
             preds = self.model(input_tensor).squeeze(0).cpu().numpy()
-            # preds represents [pct_return_close, volatility_mult, high_slack, low_slack]
 
-        # Calculate remaining intervals
-        int_min = 5 if interval == "5m" else (15 if interval == "15m" else 1)
+        # Target session drift strictly clamped to realistic intraday boundary (max +-1.2%)
+        raw_drift = float(preds[0]) * 0.05
+        clamped_drift = max(-0.012, min(0.012, raw_drift))
+
+        # Intraday target price for today's close
+        target_close = round(last_price * (1.0 + clamped_drift), 2)
+        base_vol = max(0.0008, min(0.0025, abs(float(preds[1])) * 0.002))
+
+        # Get future timestamps for today's remaining session
+        int_min = 15 if interval in ["15m", "1D"] else 5
         future_ts = self.calculate_remaining_intervals(interval_min=int_min)
 
-        # Autoregressive / Multi-step simulation forward
         forecast_candles = []
         sim_price = last_price
-        base_drift = float(preds[0]) * 0.1  # dampened delta
-        base_vol = max(0.0015, abs(float(preds[1])) * 0.004)
+        total_steps = len(future_ts)
 
         for i, ts in enumerate(future_ts):
-            step_decay = math.exp(-i * 0.05)  # Volatility expands with horizon
-            horizon_vol = base_vol * (1.0 + (i * 0.03))
+            # Mean-reverting interpolation towards session target with noise
+            progress = (i + 1) / total_steps
+            expected_price = last_price + (target_close - last_price) * progress
+            noise = np.random.normal(0, base_vol * last_price * 0.5)
 
-            # Sample predicted return
-            drift = base_drift * step_decay
-            noise = np.random.normal(0, horizon_vol)
-            step_return = drift + noise
+            open_p = round(sim_price, 2)
+            close_p = round(expected_price + noise, 2)
 
-            open_p = sim_price
-            close_p = round(open_p * (1.0 + step_return), 2)
-            high_slack = abs(float(preds[2])) * 0.002 + abs(np.random.normal(0, horizon_vol * 0.5))
-            low_slack = abs(float(preds[3])) * 0.002 + abs(np.random.normal(0, horizon_vol * 0.5))
+            # Ensure high and low form realistic candle geometry
+            wick_spread = abs(np.random.normal(0, base_vol * last_price * 0.75))
+            high_p = round(max(open_p, close_p) + wick_spread, 2)
+            low_p = round(min(open_p, close_p) - wick_spread, 2)
+            vol_sim = int(last_candle.volume * (0.85 + np.random.uniform(0, 0.3)))
 
-            high_p = round(max(open_p, close_p) * (1.0 + high_slack), 2)
-            low_p = round(min(open_p, close_p) * (1.0 - low_slack), 2)
-            vol_sim = int(last_candle.volume * (0.8 + np.random.uniform(0, 0.4)))
-
-            # Confidence drops as horizon increases
-            confidence = max(0.60, 0.92 - (i * 0.015))
-            upper_bound = round(close_p * (1.0 + 1.96 * horizon_vol), 2)
-            lower_bound = round(close_p * (1.0 - 1.96 * horizon_vol), 2)
+            # Confidence drops gracefully with step distance
+            confidence = max(0.70, 0.94 - (i * 0.018))
+            step_vol_band = base_vol * (1.0 + (i * 0.05))
+            upper_bound = round(close_p * (1.0 + 1.645 * step_vol_band), 2)
+            lower_bound = round(close_p * (1.0 - 1.645 * step_vol_band), 2)
 
             fc = Candle.create_forecast(
                 timestamp=ts,
@@ -291,12 +292,10 @@ class CandlePredictor:
                 lower_bound=lower_bound,
             )
             forecast_candles.append(fc)
-            sim_price = close_p  # Chain forward
+            sim_price = close_p
 
-        # Update candle store with these forecast candles
         candle_store.set_forecast_candles(symbol, interval, forecast_candles)
 
-        # Update metrics
         dur_ms = (time.perf_counter() - start_t) * 1000.0
         model_health.total_inferences += 1
         model_health.avg_latency_ms = (model_health.avg_latency_ms * 0.9) + (dur_ms * 0.1)

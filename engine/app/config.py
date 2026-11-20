@@ -94,11 +94,47 @@ class Settings(BaseSettings):
     CANDLE_COLOR_BEARISH: str = "#FF3B30"
     CANDLE_COLOR_FORECAST: str = "#8A2BE2"
 
-    # Market Hours (IST: 09:15 AM to 03:30 PM)
+    # Market Hours (IST: Monday-Friday, 09:15 AM to 03:30 PM)
     MARKET_OPEN_HOUR: int = 9
     MARKET_OPEN_MINUTE: int = 15
     MARKET_CLOSE_HOUR: int = 15
     MARKET_CLOSE_MINUTE: int = 30
+
+    @staticmethod
+    def get_market_status() -> dict:
+        """
+        Determines whether the Indian stock market (BSE/NSE) is currently open.
+        Trading Hours: Monday to Friday, 09:15 AM to 03:30 PM IST (UTC+5:30).
+        """
+        from datetime import datetime, timezone, timedelta
+        ist = timezone(timedelta(hours=5, minutes=30))
+        now = datetime.now(tz=ist)
+
+        is_weekday = now.weekday() < 5  # Mon=0, Fri=4, Sat=5, Sun=6
+        current_time_min = now.hour * 60 + now.minute
+        open_time_min = 9 * 60 + 15
+        close_time_min = 15 * 60 + 30
+
+        is_open = is_weekday and (open_time_min <= current_time_min < close_time_min)
+
+        if is_open:
+            mins_left = close_time_min - current_time_min
+            status_text = f"MARKET OPEN (Closes in {mins_left // 60}h {mins_left % 60}m)"
+        else:
+            if not is_weekday:
+                status_text = "MARKET CLOSED (Weekend • Opens Mon 09:15 IST)"
+            elif current_time_min < open_time_min:
+                mins_to_open = open_time_min - current_time_min
+                status_text = f"MARKET CLOSED (Pre-market • Opens in {mins_to_open // 60}h {mins_to_open % 60}m)"
+            else:
+                status_text = "MARKET CLOSED (Session Ended • Opens Mon-Fri 09:15 IST)"
+
+        return {
+            "is_open": is_open,
+            "status_text": status_text,
+            "current_time_ist": now.strftime("%Y-%m-%d %H:%M:%S IST"),
+            "weekday": now.strftime("%A"),
+        }
 
     class Config:
         env_file = ".env"

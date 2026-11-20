@@ -16,7 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getFirestoreWallet, executePaperTrade } from '../../services/firestoreService';
+import { getFirestoreWallet, recordTransactionInLedger } from '../../services/firestoreService';
 
 interface StockChartModalProps {
   symbol: string;
@@ -32,7 +32,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   onTradeSuccess,
 }) => {
   const { user } = useAuth();
-  const [interval, setInterval] = useState<'1m' | '5m' | '15m' | '1D'>('5m');
+  const [timeline, setTimeline] = useState<'1D' | '1W' | '1M' | '1Y' | '5Y'>('1D');
   const [chartData, setChartData] = useState<ChartResponse | null>(null);
   const [insight, setInsight] = useState<MarketInsight | null>(null);
   const [, setLoading] = useState<boolean>(true);
@@ -47,6 +47,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null);
+  const animPhaseRef = useRef<number>(0);
 
   useEffect(() => {
     if (!isOpen || !symbol) return;
@@ -61,18 +62,33 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
     }
 
     // Load Chart & Insights in parallel
+    const allowForecast = timeline === '1D' && showForecast;
     Promise.all([
-      fetchStockChart(symbol, interval, showForecast),
+      fetchStockChart(symbol, '5m', allowForecast, timeline),
       fetchStockInsight(symbol),
     ]).then(([chart, ins]) => {
       setChartData(chart);
       setInsight(ins);
       setLoading(false);
     });
-  }, [isOpen, symbol, interval, showForecast, user?.uid]);
+  }, [isOpen, symbol, timeline, showForecast, user?.uid]);
 
-  // Canvas drawing
+  // Continuous animation loop for glowing purple forecast candles
   useEffect(() => {
+    if (!isOpen || !chartData) return;
+    let animId: number;
+
+    const render = () => {
+      animPhaseRef.current += 0.05;
+      drawCanvas();
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(animId);
+  }, [isOpen, chartData]);
+
+  const drawCanvas = () => {
     if (!canvasRef.current || !chartData || chartData.candles.length === 0) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -80,9 +96,11 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+    }
 
     const w = rect.width;
     const h = rect.height;
@@ -107,7 +125,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
     });
 
     const priceRange = maxPrice - minPrice || 1;
-    const pad = priceRange * 0.05;
+    const pad = priceRange * 0.08;
     const yMin = minPrice - pad;
     const yMax = maxPrice + pad;
     const totalYRange = yMax - yMin;
@@ -130,9 +148,10 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
       ctx.fillText(`₹${pVal.toFixed(1)}`, w - paddingRight + 6, y + 3);
     }
 
-    // Draw Candles
+    // Draw Candles with Pulsing Glow Animation
+    const pulseBlur = 3 + 4 * Math.abs(Math.sin(animPhaseRef.current));
     const count = candles.length;
-    const candleW = Math.max(3, (chartW / count) * 0.7);
+    const candleW = Math.max(3, (chartW / count) * 0.72);
     const stepX = chartW / count;
 
     candles.forEach((c, idx) => {
@@ -146,7 +165,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
       if (c.is_forecast && c.upper_bound && c.lower_bound) {
         const yUp = priceToY(c.upper_bound);
         const yDown = priceToY(c.lower_bound);
-        ctx.fillStyle = 'rgba(138, 43, 226, 0.12)';
+        ctx.fillStyle = 'rgba(138, 43, 226, 0.10)';
         ctx.fillRect(x - stepX / 2, yUp, stepX, yDown - yUp);
       }
 
@@ -165,7 +184,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
       ctx.fillStyle = c.color;
       if (c.is_forecast) {
         ctx.shadowColor = '#8A2BE2';
-        ctx.shadowBlur = 4;
+        ctx.shadowBlur = pulseBlur;
         ctx.fillRect(x - candleW / 2, topY, candleW, bodyH);
         ctx.shadowBlur = 0;
       } else {
@@ -174,7 +193,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
       (c as any)._x = x;
     });
-  }, [chartData]);
+  };
 
   // Handle canvas mouse move
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -197,27 +216,37 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   const handleExecuteTrade = async () => {
     if (!user?.uid || !chartData) return;
     const latestPrice = chartData.candles.find((c) => !c.is_forecast)?.close || 1500;
-    const pricePaise = Math.round(latestPrice * 100);
+    const totalCostPaise = Math.round(latestPrice * quantity * 100);
+
+    if (orderSide === 'BUY' && totalCostPaise > walletBalancePaise) {
+      alert('Insufficient virtual balance to execute this trade.');
+      return;
+    }
 
     setOrderSubmitting(true);
     try {
-      const res = await executePaperTrade(user.uid, {
-        symbol,
-        side: orderSide,
-        quantity,
-        price_paise: pricePaise,
+      // 1. Record in double-entry ledger in integer paise
+      await recordTransactionInLedger(user.uid, {
+        type: orderSide === 'BUY' ? 'TRADE_BUY' : 'TRADE_SELL',
+        amount_paise: totalCostPaise,
+        balance_after_paise:
+          orderSide === 'BUY'
+            ? walletBalancePaise - totalCostPaise
+            : walletBalancePaise + totalCostPaise,
+        description: `Virtual ${orderSide} ${quantity} ${symbol} @ ₹${latestPrice.toFixed(2)}`,
+        reference_id: `ord_${Date.now()}_${symbol}`,
       });
 
-      if (!res.success) {
-        alert(res.message);
-      } else {
-        setWalletBalancePaise(res.balance_after_paise);
-        setOrderSuccessMsg(res.message);
-        if (onTradeSuccess) onTradeSuccess();
-      }
+      setWalletBalancePaise((prev) =>
+        orderSide === 'BUY' ? prev - totalCostPaise : prev + totalCostPaise
+      );
+      setOrderSuccessMsg(
+        `Successfully executed virtual ${orderSide} of ${quantity} shares of ${symbol}!`
+      );
+      if (onTradeSuccess) onTradeSuccess();
     } catch (err) {
       console.error('Trade error:', err);
-      alert('Failed to execute virtual trade.');
+      alert('Failed to record virtual trade.');
     } finally {
       setOrderSubmitting(false);
     }
@@ -265,37 +294,50 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
                 {insight?.change_pct || 0}%
               </div>
             </div>
+            {chartData?.market && (
+              <span
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                  chartData.market.is_open
+                    ? 'bg-emerald-950 text-emerald-400 border-emerald-800/60'
+                    : 'bg-rose-950 text-rose-400 border-rose-800/60'
+                }`}
+              >
+                {chartData.market.is_open ? 'MARKET OPEN' : 'MARKET CLOSED'}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Chart Viewport & Interval Selector */}
+        {/* Chart Viewport & Timeline Selector (1D, 1W, 1M, 1Y, 5Y) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="inline-flex rounded-lg border border-surface-border bg-surface-inset p-0.5 text-xs">
-              {(['1m', '5m', '15m', '1D'] as const).map((intVal) => (
+              {(['1D', '1W', '1M', '1Y', '5Y'] as const).map((tl) => (
                 <button
-                  key={intVal}
-                  onClick={() => setInterval(intVal)}
+                  key={tl}
+                  onClick={() => setTimeline(tl)}
                   className={`px-3 py-1 rounded-md font-semibold transition-colors ${
-                    interval === intVal
-                      ? 'bg-brand-marigold-bg text-brand-marigold-text font-bold'
+                    timeline === tl
+                      ? 'bg-purple-900/60 text-purple-200 font-bold border border-purple-700/50'
                       : 'text-text-tertiary hover:text-text-primary'
                   }`}
                 >
-                  {intVal}
+                  {tl}
                 </button>
               ))}
             </div>
 
-            <label className="flex items-center text-xs text-purple-400 gap-1.5 cursor-pointer bg-purple-950/30 px-2.5 py-1 rounded-lg border border-purple-800/40">
-              <input
-                type="checkbox"
-                checked={showForecast}
-                onChange={(e) => setShowForecast(e.target.checked)}
-                className="rounded text-purple-600 focus:ring-0"
-              />
-              <span className="font-semibold">Purple Forecast Candles (#8A2BE2)</span>
-            </label>
+            {timeline === '1D' && (
+              <label className="flex items-center text-xs text-purple-400 gap-1.5 cursor-pointer bg-purple-950/30 px-2.5 py-1 rounded-lg border border-purple-800/40">
+                <input
+                  type="checkbox"
+                  checked={showForecast}
+                  onChange={(e) => setShowForecast(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-0"
+                />
+                <span className="font-semibold">Purple Forecasts (#8A2BE2)</span>
+              </label>
+            )}
           </div>
 
           {/* Canvas Box */}

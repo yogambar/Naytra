@@ -32,7 +32,8 @@ async def get_market_tickers(response: Response):
 async def get_market_chart(
     symbol: str,
     response: Response,
-    interval: str = Query("5m", pattern="^(1m|5m|15m|1D)$"),
+    interval: str = Query("5m", pattern="^(1m|5m|15m|1D|1W|1M|1Y|5Y)$"),
+    timeline: str = Query("1D", pattern="^(1D|1W|1M|1Y|5Y|1m|5m|15m)$"),
     limit: int = Query(80, ge=10, le=300),
     include_forecast: bool = Query(True),
     if_none_match: Optional[str] = Header(None),
@@ -40,7 +41,7 @@ async def get_market_chart(
     """
     Returns candlestick chart series containing:
     - Real actual candles (Green #00C805 / Red #FF3B30)
-    - Future session forecasts (Purple #8A2BE2)
+    - Future session forecasts (Purple #8A2BE2) for 1D timeline
     """
     headers = {}
     if if_none_match:
@@ -50,7 +51,12 @@ async def get_market_chart(
         async with httpx.AsyncClient(timeout=5.0) as client:
             res = await client.get(
                 f"{ENGINE_URL}/api/v1/market/charts/{symbol.upper()}",
-                params={"interval": interval, "limit": limit, "include_forecast": include_forecast},
+                params={
+                    "interval": interval,
+                    "timeline": timeline,
+                    "limit": limit,
+                    "include_forecast": include_forecast,
+                },
                 headers=headers,
             )
 
