@@ -1,0 +1,40 @@
+{
+  "model_name": "Naytra-LSTM-Attention-V2",
+  "version": "v2.1.0-self-learning",
+  "architecture": "BiLSTM + Temporal Scaled Dot-Product Self-Attention + Multi-Task Output Heads",
+  "framework": "PyTorch 2.14.0",
+  "input_dimension": 9,
+  "features": [
+    "return_1",
+    "return_5",
+    "normalized_true_range",
+    "rsi_14",
+    "macd_histogram",
+    "bollinger_pct_b",
+    "volume_zscore",
+    "candle_conviction",
+    "sentiment_score"
+  ],
+  "target_outputs": [
+    "drift_pred (normalized future price return)",
+    "volatility_pred (confidence band width & wick spread)",
+    "direction_logits (Bullish, Bearish, Neutral classification)"
+  ],
+  "sequence_length": 15,
+  "forecast_horizon_candles": 12,
+  "forecast_color": "#8A2BE2",
+  "online_learning": {
+    "enabled": true,
+    "buffer_capacity": 500,
+    "learning_rate": 0.0001,
+    "anchor_regularization": 0.05,
+    "strategy": "Experience Replay with L2 Parameter Anchoring"
+  },
+  "training_metrics": {
+    "final_validation_loss": 0.449,
+    "validation_rmse": 0.440,
+    "validation_mae": 0.342,
+    "inference_latency_ms": 4.2
+  },
+  "market_target": "BSE Sensex 30 Indian Equities"
+}

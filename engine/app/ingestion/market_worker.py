@@ -318,14 +318,27 @@ class MarketIngestionWorker:
             if not existing:
                 count = self.load_historical_yfinance(sym, period="2d", interval="5m")
                 if count == 0:
-                    # Seed with initial synthetic base
-                    synth = self.generate_synthetic_candle(sym)
-                    candle_store.add_actual_candle(sym, "5m", synth)
+                    # Seed with initial historical series (12 candles) so technical features & ML buffer are immediately valid
+                    now_ts = int(time.time())
+                    aligned = now_ts - (now_ts % 300)
+                    for k in range(12, 0, -1):
+                        c = self.generate_synthetic_candle(sym, interval_sec=300)
+                        c.timestamp = aligned - (k * 300)
+                        candle_store.add_actual_candle(sym, "5m", c)
 
             # 2. Add latest actual tick/candle
+            prev_history = candle_store.get_chart(sym, "5m", limit_actual=15, include_forecast=False)
             candle = self.generate_synthetic_candle(sym, interval_sec=300)
             candle_store.add_actual_candle(sym, "5m", candle)
             stats.total_ticks_processed += 1
+
+            # Continuous self-learning: record observation into ML online replay buffer
+            try:
+                from app.models.candle_predictor import predictor
+                sentiment = self._symbol_sentiment.get(sym, 0.0)
+                predictor.online_learner.record_market_candle(sym, prev_history, candle, sentiment=sentiment)
+            except Exception:
+                pass
 
             # 3. Update quote cache
             change_pct = round(((candle.close - candle.open) / candle.open) * 100, 2)
@@ -347,6 +360,17 @@ class MarketIngestionWorker:
 
         # Cache tickers summary
         await cache.set_json("quotes:all", list(self._latest_quotes.values()), ttl_sec=30)
+
+        # Execute continuous self-training gradient step
+        try:
+            from app.models.candle_predictor import predictor
+            step_result = predictor.online_learner.step_online_update(batch_size=16)
+            if step_result:
+                logger.info("Executed online self-training step %d (loss: %.4f)",
+                            step_result["online_step"], step_result["loss"])
+        except Exception as e:
+            logger.warning("Online self-training step skipped: %s", e)
+
         logger.info("Ingestion cycle completed. Processed %d tickers.", len(SENSEX_30))
 
 

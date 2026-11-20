@@ -66,6 +66,21 @@ async def trigger_news():
     return {"status": "SUCCESS", "count": len(articles), "message": f"Fetched {len(articles)} news articles"}
 
 
+@ops_router.get("/ml/self-learning-stats")
+async def get_self_learning_stats():
+    """Returns real-time diagnostics of the online continuous self-learning loop."""
+    return predictor.online_learner.get_stats()
+
+
+@ops_router.post("/trigger-online-train")
+async def trigger_online_train():
+    """Forces an online gradient step on the replay buffer."""
+    res = predictor.online_learner.step_online_update(batch_size=16)
+    if not res:
+        return {"status": "WAITING_DATA", "message": "Buffer filling up with live market observations"}
+    return {"status": "SUCCESS", "details": res}
+
+
 @ops_router.post("/clear-cache")
 async def clear_cache():
     """Clears in-memory and Redis caches."""

@@ -484,11 +484,13 @@
 
     // Fetch and Load Chart Data
     async function loadChartData() {
+      const requestedSymbol = currentSymbol;
       const incFc = (currentTimeline === '1D') && document.getElementById('toggle-forecast').checked;
       try {
-        const res = await fetch(`/api/v1/market/charts/${currentSymbol}?timeline=${currentTimeline}&include_forecast=${incFc}`);
+        const res = await fetch(`/api/v1/market/charts/${requestedSymbol}?timeline=${currentTimeline}&include_forecast=${incFc}`);
         if (!res.ok) return;
         const data = await res.json();
+        if (data.symbol !== currentSymbol) return;
         currentCandles = data.candles;
 
         document.getElementById('actual-count-stat').textContent = data.actual_candles_count;
@@ -646,10 +648,13 @@
 
     // Fetch LLM Insights
     async function loadInsight() {
+      const requestedSymbol = currentSymbol;
       try {
-        const res = await fetch(`/api/v1/market/insights/${currentSymbol}`);
+        const res = await fetch(`/api/v1/market/insights/${requestedSymbol}`);
         if (!res.ok) return;
         const data = await res.json();
+        // Guard against race condition: only render if user is still on this symbol
+        if (data.symbol !== currentSymbol) return;
 
         document.getElementById('insight-stance-badge').textContent = data.technical_stance;
         document.getElementById('insight-stance-badge').className =
