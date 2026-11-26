@@ -2,7 +2,6 @@ import React, { useState, useEffect, useId } from 'react';
 import { Link } from 'react-router-dom';
 import {
   X,
-  BarChart2,
   Wallet,
   HelpCircle,
   CheckCircle2,
@@ -20,7 +19,6 @@ export interface OrderTicketPanelProps {
   availableCashPaise: number;
   holdings: HoldingPositionDoc[];
   onClearSelection: () => void;
-  onOpenChart: (symbol: string) => void;
   onExecuteOrder: (payload: {
     symbol: string;
     name: string;
@@ -49,7 +47,6 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
   availableCashPaise,
   holdings,
   onClearSelection,
-  onOpenChart,
   onExecuteOrder,
 }) => {
   const qtyId = useId();
@@ -230,14 +227,6 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
               ({isUp ? '+' : ''}
               {selectedTicker.change_pct}%)
             </span>
-            <button
-              type="button"
-              onClick={() => onOpenChart(selectedTicker.symbol)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-400 hover:text-purple-300 underline underline-offset-2 cursor-pointer"
-            >
-              <BarChart2 className="w-3 h-3" aria-hidden="true" />
-              Chart
-            </button>
           </div>
         </div>
 

@@ -328,7 +328,6 @@ export const HoldingsPage: React.FC = () => {
               setSelectedSymbol(null);
               setSelectedOrderMode(undefined);
             }}
-            onOpenChart={handleOpenChart}
             onExecuteOrder={handleExecuteOrder}
           />
         </div>
