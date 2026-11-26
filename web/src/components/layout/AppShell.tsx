@@ -8,6 +8,7 @@ import { useStatusBar } from '../../hooks/useStatusBar';
 import { hapticTick } from '../../utils/haptics';
 import { ThemeToggle } from '../../design/ThemeToggle';
 import { useSyncedWallet } from '../../context/WalletContext';
+import { formatCompactINR } from '../../utils/formatCompactINR';
 
 interface NavItem {
   id: string;
@@ -38,11 +39,12 @@ export const AppShell: React.FC = () => {
   };
 
   const balanceRaw = (wallet?.balance_paise ?? 0) / 100;
-  const syncedCashFormatted = new Intl.NumberFormat('en-IN', {
+  const syncedCashFormatted = formatCompactINR(balanceRaw);
+  const syncedCashExact = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: balanceRaw < 1000 ? 2 : 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(balanceRaw);
 
   return (
@@ -96,10 +98,13 @@ export const AppShell: React.FC = () => {
                       transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                     />
                   )}
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-brand-marigold' : 'text-text-tertiary'}`} />
-                  <span className="flex-1">{item.label}</span>
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-brand-marigold' : 'text-text-tertiary'}`} />
+                  <span className="flex-1 min-w-0 truncate">{item.label}</span>
                   {item.id === 'wallet' && (
-                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-surface-base text-brand-up border border-brand-up/30">
+                    <span
+                      title={`Available balance: ${syncedCashExact}`}
+                      className="shrink-0 whitespace-nowrap text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-surface-base text-brand-up border border-brand-up/30 tabular-nums"
+                    >
                       {syncedCashFormatted}
                     </span>
                   )}

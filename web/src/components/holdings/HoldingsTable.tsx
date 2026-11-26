@@ -108,7 +108,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   };
 
   return (
-    <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden shadow-sm">
+    <div className="w-full rounded-xl border border-surface-border bg-surface-raised overflow-hidden shadow-sm">
       <div role="status" aria-live="polite" className="sr-only">
         {sortAnnouncement}
       </div>

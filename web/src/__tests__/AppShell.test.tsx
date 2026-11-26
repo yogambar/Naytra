@@ -96,6 +96,16 @@ describe('AppShell & Navigation', () => {
     expect(mainEl).toHaveClass('overflow-x-clip');
     expect(mainEl).not.toHaveClass('overflow-x-hidden');
     expect(screen.getByTestId('holdings-sticky-panel')).toHaveClass('lg:sticky');
+
+    // Outer wrapper must have w-full so switching My Holdings <-> Sensex 30 keeps card sizes identical
+    const heading = screen.getByRole('heading', { name: /Holdings & Sensex 30/i });
+    const pageRoot = heading.closest('.max-w-7xl');
+    expect(pageRoot).toHaveClass('w-full');
+
+    // Sidebar Wallet icon must have shrink-0 so large amounts never squish it
+    const walletLinks = screen.getAllByRole('link', { name: /Wallet/i });
+    const walletSvg = walletLinks[0].querySelector('svg');
+    expect(walletSvg).toHaveClass('shrink-0');
   });
 
   it('navigates to Learn page when Learn tab is clicked', async () => {

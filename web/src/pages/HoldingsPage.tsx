@@ -172,7 +172,7 @@ export const HoldingsPage: React.FC = () => {
   const hasHoldings = holdingsRows.length > 0;
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="w-full space-y-5 max-w-7xl mx-auto">
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
@@ -184,13 +184,13 @@ export const HoldingsPage: React.FC = () => {
       </div>
 
       {/* ── Two-Column Layout ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
         {/* ━━ LEFT COLUMN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <div className="space-y-4 min-w-0">
+        <div className="space-y-4 min-w-0 w-full">
           {/* ── Portfolio Summary Card (Groww-style) ─────────────────────── */}
-          <Card3D elevation="e2" className="p-5 border border-surface-border">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-text-tertiary uppercase tracking-wide">
+          <Card3D elevation="e2" interactive={false} className="w-full p-5 sm:p-6 border border-surface-border">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-text-tertiary uppercase tracking-wider">
                 <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>Holdings ({holdingsRows.length})</span>
               </div>
@@ -198,7 +198,7 @@ export const HoldingsPage: React.FC = () => {
                 type="button"
                 onClick={() => setHideValues((v) => !v)}
                 aria-label={hideValues ? 'Show portfolio values' : 'Hide portfolio values'}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-inset transition-colors"
+                className="p-2 rounded-lg border border-surface-border text-text-tertiary hover:text-text-primary hover:bg-surface-inset transition-colors cursor-pointer"
               >
                 {hideValues ? (
                   <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -210,21 +210,23 @@ export const HoldingsPage: React.FC = () => {
 
             {hasHoldings ? (
               <>
-                <div className="text-2xl font-extrabold font-mono text-text-primary mb-3">
+                <div className="text-2xl sm:text-[26px] font-extrabold font-mono text-text-primary tracking-tight tabular-nums">
                   {hideValues ? '₹••••••' : formatINR(totalCurrentValueInr)}
                 </div>
 
-                <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs">
-                  <div>
-                    <span className="text-text-tertiary">Invested value</span>
-                    <p className="font-mono font-bold text-text-secondary mt-0.5">
+                <div className="border-t border-dashed border-surface-border my-4" />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start text-xs">
+                  <div className="text-left">
+                    <span className="text-text-tertiary font-medium">Invested value</span>
+                    <p className="text-sm font-mono font-bold text-text-primary mt-1 tabular-nums">
                       {hideValues ? '₹••••' : formatINR(totalInvestedInr)}
                     </p>
                   </div>
-                  <div>
-                    <span className="text-text-tertiary">1D returns</span>
+                  <div className="sm:text-right">
+                    <span className="text-text-tertiary font-medium">1D returns</span>
                     <p
-                      className={`font-mono font-bold mt-0.5 ${
+                      className={`text-sm font-mono font-bold mt-1 tabular-nums ${
                         oneDayReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
                       }`}
                     >
@@ -233,10 +235,10 @@ export const HoldingsPage: React.FC = () => {
                         : `${signedINR(oneDayReturnInr)} (${signedPct(oneDayReturnPct)})`}
                     </p>
                   </div>
-                  <div>
-                    <span className="text-text-tertiary">Total returns</span>
+                  <div className="sm:text-right">
+                    <span className="text-text-tertiary font-medium">Total returns</span>
                     <p
-                      className={`font-mono font-bold mt-0.5 ${
+                      className={`text-sm font-mono font-bold mt-1 tabular-nums ${
                         totalReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
                       }`}
                     >

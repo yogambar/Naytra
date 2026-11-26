@@ -64,7 +64,7 @@ export const DashboardPage: React.FC = () => {
   const recentOrders = orders.slice(0, 5);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="w-full space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>

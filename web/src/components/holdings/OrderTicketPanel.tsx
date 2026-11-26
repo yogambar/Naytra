@@ -372,8 +372,8 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
             />
           </div>
 
-          {side === 'SELL' && (
-            <div className="flex justify-end">
+          <div className="min-h-[18px] flex justify-end">
+            {side === 'SELL' && (
               <button
                 type="button"
                 onClick={() => {
@@ -386,8 +386,8 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
               >
                 Qty available <strong className="font-mono text-text-primary">{availableShares}</strong>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Price Type Row */}
@@ -412,7 +412,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
           </div>
 
           {priceType === 'Market' ? (
-            <div className="w-32 px-3 py-2 rounded-lg bg-surface-inset/70 border border-surface-border text-xs font-semibold text-text-tertiary text-center select-none">
+            <div className="w-32 h-[38px] px-3 rounded-lg bg-surface-inset/70 border border-surface-border text-xs font-semibold text-text-tertiary flex items-center justify-center select-none">
               At market
             </div>
           ) : (
@@ -429,7 +429,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
                 setLimitPriceText(e.target.value);
                 if (formError) setFormError(null);
               }}
-              className="w-32 px-3 py-2 text-right font-mono font-bold text-sm rounded-lg bg-surface-inset border border-surface-border text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-marigold/60"
+              className="w-32 h-[38px] px-3 text-right font-mono font-bold text-sm rounded-lg bg-surface-inset border border-surface-border text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-marigold/60"
             />
           )}
         </div>
@@ -467,12 +467,12 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
 
         {/* Balance & Estimate Footer + Primary CTA */}
         <div className="pt-2 border-t border-surface-border space-y-3">
-          <div className="flex items-center justify-between text-[11px] text-text-tertiary">
-            <span>
+          <div className="flex items-center justify-between gap-2 text-[11px] text-text-tertiary">
+            <span className="truncate">
               Balance:{' '}
               <strong className="font-mono text-text-primary">{formatINR(cashInr)}</strong>
             </span>
-            <span>
+            <span className="shrink-0">
               {side === 'BUY' ? 'Approx req.: ' : 'Sell value: '}
               <strong className="font-mono text-text-primary underline decoration-dotted underline-offset-4">
                 {formatINR(estimatedTotalInr)}

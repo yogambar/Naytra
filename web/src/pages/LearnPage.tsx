@@ -40,7 +40,7 @@ export const LearnPage: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="w-full space-y-6 max-w-5xl mx-auto">
       <div>
         <div className="flex items-center gap-2">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">

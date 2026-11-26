@@ -49,7 +49,7 @@ export const ProfilePage: React.FC = () => {
   const isVerified = Boolean(profile?.email_verified || user?.emailVerified);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="w-full space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
