@@ -28,6 +28,26 @@ async def get_market_tickers(response: Response):
         return {"count": 0, "data": []}
 
 
+@router.get("/pulse")
+async def get_market_pulse(
+    response: Response,
+    symbols: Optional[str] = Query(None),
+):
+    """Proxies aggregated dashboard market pulse (predictions, sectors, personalized news)."""
+    response.headers["Cache-Control"] = "public, max-age=20, stale-while-revalidate=40"
+    try:
+        params = {"symbols": symbols} if symbols else {}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(f"{ENGINE_URL}/api/v1/market/pulse", params=params)
+            if res.status_code != 200:
+                raise HTTPException(status_code=res.status_code, detail="Pulse engine error")
+            return res.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="Market pulse service temporarily unavailable")
+
+
 @router.get("/charts/{symbol}")
 async def get_market_chart(
     symbol: str,

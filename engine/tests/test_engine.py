@@ -130,3 +130,19 @@ def test_stock_specific_news_resolution_and_word_boundaries():
     assert len(tcs_news) >= 1
     assert all(item["symbol"] == "TCS" for item in tcs_news)
     assert tcs_news[0]["title"] != rel_news[0]["title"]
+
+
+@pytest.mark.asyncio
+async def test_market_pulse_endpoint_personalizes_symbols():
+    """Verify /api/v1/market/pulse aggregates Sensex predictions, sectors, and priority news."""
+    from fastapi import Response
+    from app.routes.api import get_market_pulse
+
+    resp = Response()
+    data = await get_market_pulse(response=resp, symbols="TCS,RELIANCE")
+
+    assert len(data["predictions"]) == 30
+    assert len(data["sectors"]) >= 10
+    assert "sensex_index" in data
+    assert len(data["news"]) >= 1
+    assert any(a["symbol"] in ("TCS", "RELIANCE") and a["is_personalized"] for a in data["news"])
