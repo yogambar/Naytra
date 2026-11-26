@@ -288,8 +288,8 @@ export const WalletPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Two-Column Groww Layout: 70:30 Balance Card (Left) + Add Money / Withdraw (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(290px,3fr)] gap-6 items-stretch">
+      {/* ── Two-Column Groww Layout: 60:40 Balance Card (Left) + Add Money / Withdraw (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,6fr)_minmax(300px,4fr)] gap-6 items-stretch">
         {/* ━━ LEFT: Balance Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <Card3D
           data-testid="wallet-balance-card"

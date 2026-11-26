@@ -1,12 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, TrendingUp, BookOpen, Wallet, User, Activity, Palette } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, BookOpen, Wallet, User } from 'lucide-react';
 import { useMotionPrefs } from '../../hooks/useMotionPrefs';
 import { useAndroidBack } from '../../hooks/useAndroidBack';
 import { useStatusBar } from '../../hooks/useStatusBar';
 import { hapticTick } from '../../utils/haptics';
-import { ThemeToggle } from '../../design/ThemeToggle';
+import { useAuth } from '../../context/AuthContext';
 import { useSyncedWallet } from '../../context/WalletContext';
 import { formatCompactINR } from '../../utils/formatCompactINR';
 
@@ -25,9 +25,19 @@ const navItems: NavItem[] = [
   { id: 'profile', path: '/profile', label: 'Profile', icon: User },
 ];
 
+const desktopPrimaryNavItems = navItems.filter((item) => item.id !== 'profile');
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'TR';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
 export const AppShell: React.FC = () => {
   const location = useLocation();
   const { prefersReducedMotion } = useMotionPrefs();
+  const { user, profile } = useAuth();
   const { wallet } = useSyncedWallet();
 
   // Register native Android back button and status bar styling
@@ -37,6 +47,20 @@ export const AppShell: React.FC = () => {
   const handleTabClick = () => {
     hapticTick();
   };
+
+  const displayName =
+    profile?.name?.trim() ||
+    user?.displayName?.trim() ||
+    user?.email?.split('@')[0] ||
+    'Trader';
+  const initials = getInitials(displayName);
+  const profileSubtext =
+    profile?.username
+      ? `@${profile.username}`
+      : profile?.email_verified || user?.emailVerified
+        ? 'Verified'
+        : 'Account';
+  const isProfileActive = location.pathname === '/profile';
 
   const balanceRaw = (wallet?.balance_paise ?? 0) / 100;
   const syncedCashFormatted = formatCompactINR(balanceRaw);
@@ -77,7 +101,7 @@ export const AppShell: React.FC = () => {
 
           {/* Navigation Links */}
           <nav className="space-y-1.5" aria-label="Main sidebar menu">
-            {navItems.map((item) => {
+            {desktopPrimaryNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || (item.path === '/dashboard' && location.pathname === '/');
               return (
@@ -114,29 +138,33 @@ export const AppShell: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom Rail Actions */}
-        <div className="pt-4 border-t border-surface-border space-y-3">
-          <div className="flex items-center justify-between px-2">
-            <span className="text-xs font-semibold text-text-tertiary">Theme</span>
-            <ThemeToggle />
-          </div>
-
-          <div className="flex items-center justify-between px-2 text-xs">
-            <NavLink
-              to="/design"
-              className="text-text-tertiary hover:text-brand-marigold transition-colors flex items-center gap-1 font-semibold"
+        {/* Bottom-left Profile Footer (matches minimalist ChatGPT-style account bar) */}
+        <div className="pt-3 border-t border-surface-border">
+          <NavLink
+            to="/profile"
+            onClick={handleTabClick}
+            aria-label={`Profile: ${displayName}`}
+            className={`flex items-center gap-3 px-2.5 py-2 rounded-xl transition-colors ${
+              isProfileActive
+                ? 'bg-surface-inset border border-surface-border shadow-sm'
+                : 'hover:bg-surface-inset/60 border border-transparent'
+            }`}
+          >
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-full bg-sky-500 text-white font-bold text-xs flex items-center justify-center shrink-0 tracking-tight"
             >
-              <Palette className="w-3.5 h-3.5" />
-              Design System
-            </NavLink>
-            <NavLink
-              to="/status"
-              className="text-text-tertiary hover:text-brand-up transition-colors flex items-center gap-1 font-semibold"
-            >
-              <Activity className="w-3.5 h-3.5" />
-              API Status
-            </NavLink>
-          </div>
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-text-primary truncate leading-tight">
+                {displayName}
+              </div>
+              <div className="text-xs text-text-tertiary truncate leading-tight mt-0.5">
+                {profileSubtext}
+              </div>
+            </div>
+          </NavLink>
         </div>
       </aside>
 

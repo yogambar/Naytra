@@ -141,12 +141,19 @@ describe('AppShell & Navigation', () => {
     expect(await screen.findByText(/Double-entry ledger in integer paise/i)).toBeInTheDocument();
   });
 
-  it('navigates to Profile page and shows Capacitor native settings', async () => {
+  it('renders Profile link in bottom sidebar footer without Theme/Design/API clutter and navigates to Profile', async () => {
     render(
-      <MemoryRouter initialEntries={['/profile']}>
+      <MemoryRouter initialEntries={['/dashboard']}>
         <App />
       </MemoryRouter>
     );
+
+    const aside = screen.getByRole('complementary', { name: /Desktop primary navigation/i });
+    expect(aside.textContent).not.toMatch(/Design System/i);
+    expect(aside.textContent).not.toMatch(/API Status/i);
+
+    const profileLink = screen.getByRole('link', { name: /Profile: Test Trader/i });
+    fireEvent.click(profileLink);
 
     expect(await screen.findByRole('heading', { name: /Profile & Settings/i })).toBeInTheDocument();
     expect(await screen.findByText(/com\.rgc\.naytra/i)).toBeInTheDocument();
