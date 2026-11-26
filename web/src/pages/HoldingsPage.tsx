@@ -36,10 +36,8 @@ export const HoldingsPage: React.FC = () => {
   const {
     wallet,
     portfolio,
-    watchlist,
     refreshFinancials,
     executeTrade,
-    toggleWatchlist,
   } = useSyncedWallet();
 
   /* Local UI & market ticker state */
@@ -154,13 +152,6 @@ export const HoldingsPage: React.FC = () => {
   const handleOpenChart = useCallback((symbol: string) => {
     setChartSymbol(symbol);
   }, []);
-
-  const handleToggleWatchlist = useCallback(
-    async (symbol: string) => {
-      await toggleWatchlist(symbol);
-    },
-    [toggleWatchlist]
-  );
 
   const handleExecuteOrder = useCallback(
     async (payload: {
@@ -287,10 +278,8 @@ export const HoldingsPage: React.FC = () => {
                 rows={holdingsRows}
                 selectedSymbol={selectedSymbol}
                 hideValues={hideValues}
-                watchlistSymbols={watchlist}
                 onSelectStock={handleSelectStock}
                 onOpenChart={handleOpenChart}
-                onToggleWatchlist={handleToggleWatchlist}
               />
             ) : (
               <Card3D elevation="e1" className="p-10 text-center border border-surface-border">
@@ -315,10 +304,8 @@ export const HoldingsPage: React.FC = () => {
               rows={exploreRows}
               selectedSymbol={selectedSymbol}
               hideValues={false}
-              watchlistSymbols={watchlist}
               onSelectStock={handleSelectStock}
               onOpenChart={handleOpenChart}
-              onToggleWatchlist={handleToggleWatchlist}
             />
           )}
         </div>

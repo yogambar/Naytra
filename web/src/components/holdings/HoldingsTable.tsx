@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useId } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Bookmark } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, BarChart2 } from 'lucide-react';
 import { Sparkline } from '../../design/Sparkline';
 import type { MarketTicker } from '../../services/marketService';
 
@@ -22,10 +22,8 @@ export interface HoldingsTableProps {
   rows: HoldingsRowData[];
   selectedSymbol: string | null;
   hideValues?: boolean;
-  watchlistSymbols: string[];
   onSelectStock: (symbol: string) => void;
   onOpenChart: (symbol: string) => void;
-  onToggleWatchlist: (symbol: string) => void;
 }
 
 type SortKey = 'name' | 'price' | 'returns' | 'current';
@@ -59,10 +57,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   rows,
   selectedSymbol,
   hideValues = false,
-  watchlistSymbols,
   onSelectStock,
   onOpenChart,
-  onToggleWatchlist,
 }) => {
   const captionId = useId();
   const [sortKey, setSortKey] = useState<SortKey>(mode === 'holdings' ? 'current' : 'name');
@@ -217,8 +213,6 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
               const totalReturnPct = row.totalReturnPct ?? 0;
               const isReturnUp = totalReturn >= 0;
 
-              const isWatchlisted = watchlistSymbols.includes(row.symbol.toUpperCase());
-
               return (
                 <tr
                   key={`${row.symbol}_${row.orderMode || mode}`}
@@ -343,40 +337,17 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                     </td>
                   )}
 
-                  {/* Independent Action Buttons */}
+                  {/* Action Buttons */}
                   <td className="px-3 py-3.5 text-right align-middle">
-                    <div className="inline-flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onOpenChart(row.symbol)}
-                        aria-label={`Open AI chart for ${row.name}`}
-                        title="Open AI Candlestick Chart"
-                        className="p-2 rounded-lg text-text-tertiary hover:text-purple-400 hover:bg-surface-inset transition-colors"
-                      >
-                        <BarChart2 className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={isWatchlisted}
-                        aria-label={
-                          isWatchlisted
-                            ? `Remove ${row.name} from watchlist`
-                            : `Add ${row.name} to watchlist`
-                        }
-                        onClick={() => onToggleWatchlist(row.symbol)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          isWatchlisted
-                            ? 'text-brand-marigold bg-brand-marigold/10'
-                            : 'text-text-tertiary hover:text-text-primary hover:bg-surface-inset'
-                        }`}
-                      >
-                        <Bookmark
-                          className="w-4 h-4"
-                          fill={isWatchlisted ? 'currentColor' : 'none'}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenChart(row.symbol)}
+                      aria-label={`Open AI chart for ${row.name}`}
+                      title="Open AI Candlestick Chart"
+                      className="p-2 rounded-lg text-text-tertiary hover:text-purple-400 hover:bg-surface-inset transition-colors"
+                    >
+                      <BarChart2 className="w-4 h-4" aria-hidden="true" />
+                    </button>
                   </td>
                 </tr>
               );
