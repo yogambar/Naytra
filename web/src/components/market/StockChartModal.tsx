@@ -20,7 +20,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getFirestoreWallet, recordTransactionInLedger } from '../../services/firestoreService';
+import { getFirestoreWallet, executePaperTradeInFirestore } from '../../services/firestoreService';
 
 function getSafeExternalUrl(rawUrl?: string): string | null {
   if (!rawUrl) return null;
@@ -281,7 +281,8 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   // Place paper order
   const handleExecuteTrade = async () => {
     if (!user?.uid || !chartData) return;
-    const latestPrice = chartData.candles.find((c) => !c.is_forecast)?.close || 1500;
+    const actualCandles = chartData.candles.filter((c) => !c.is_forecast);
+    const latestPrice = actualCandles[actualCandles.length - 1]?.close || 1500;
     const totalCostPaise = Math.round(latestPrice * quantity * 100);
 
     if (orderSide === 'BUY' && totalCostPaise > walletBalancePaise) {
@@ -291,28 +292,24 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
     setOrderSubmitting(true);
     try {
-      // 1. Record in double-entry ledger in integer paise
-      await recordTransactionInLedger(user.uid, {
-        type: orderSide === 'BUY' ? 'TRADE_BUY' : 'TRADE_SELL',
-        amount_paise: totalCostPaise,
-        balance_after_paise:
-          orderSide === 'BUY'
-            ? walletBalancePaise - totalCostPaise
-            : walletBalancePaise + totalCostPaise,
-        description: `Virtual ${orderSide} ${quantity} ${symbol} @ ₹${latestPrice.toFixed(2)}`,
-        reference_id: `ord_${Date.now()}_${symbol}`,
+      const result = await executePaperTradeInFirestore(user.uid, {
+        symbol,
+        name: insight?.company_name || symbol,
+        side: orderSide,
+        orderMode: 'Delivery',
+        priceType: 'Market',
+        quantity,
+        executionPriceInr: latestPrice,
       });
 
-      setWalletBalancePaise((prev) =>
-        orderSide === 'BUY' ? prev - totalCostPaise : prev + totalCostPaise
-      );
+      setWalletBalancePaise(result.wallet.total_cash_paise);
       setOrderSuccessMsg(
         `Successfully executed virtual ${orderSide} of ${quantity} shares of ${symbol}!`
       );
       if (onTradeSuccess) onTradeSuccess();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Trade error:', err);
-      alert('Failed to record virtual trade.');
+      alert(err?.message || 'Failed to record virtual trade.');
     } finally {
       setOrderSubmitting(false);
     }

@@ -55,15 +55,19 @@ export interface LedgerItemDoc {
   created_at: any;
 }
 
+export interface HoldingPositionDoc {
+  symbol: string;
+  name?: string;
+  quantity: number;
+  avg_price_paise: number;
+  invested_paise: number;
+  order_mode?: 'Delivery' | 'Intraday';
+}
+
 export interface PortfolioDoc {
   user_id: string;
   username?: string;
-  holdings: Array<{
-    symbol: string;
-    quantity: number;
-    avg_price_paise: number;
-    invested_paise: number;
-  }>;
+  holdings: HoldingPositionDoc[];
   total_invested_paise: number;
   current_value_paise: number;
   realized_pnl_paise: number;
@@ -72,11 +76,25 @@ export interface PortfolioDoc {
   updated_at: any;
 }
 
+export interface OrderHistoryItem {
+  order_id: string;
+  symbol: string;
+  name: string;
+  side: 'BUY' | 'SELL';
+  order_mode: 'Delivery' | 'Intraday';
+  price_type: 'Market' | 'Limit';
+  quantity: number;
+  price_paise: number;
+  total_paise: number;
+  status: 'EXECUTED';
+  created_at: string;
+}
+
 export interface OrderDoc {
   user_id: string;
   username?: string;
   orders_count: number;
-  recent_orders: Array<Record<string, any>>;
+  recent_orders: OrderHistoryItem[];
   created_at: any;
   updated_at: any;
 }
@@ -640,18 +658,381 @@ export async function recordTransactionInLedger(
 }
 
 /**
- * Fetch wallet data from Firestore.
+ * Fetch wallet data from Firestore with local cache fallback.
  */
 export async function getFirestoreWallet(userId: string): Promise<WalletDoc | null> {
+  let cachedWallet: WalletDoc | null = null;
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(`naytra_wallet_${userId}`);
+    if (raw) {
+      try {
+        cachedWallet = JSON.parse(raw) as WalletDoc;
+      } catch {
+        // ignore invalid cache
+      }
+    }
+  }
+
   try {
     const walletRef = doc(db, 'wallets', userId);
     const snap = await getDoc(walletRef);
-    if (!snap.exists()) return null;
-    return snap.data() as WalletDoc;
+    if (!snap.exists()) return cachedWallet;
+    const loaded = snap.data() as WalletDoc;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_wallet_${userId}`, JSON.stringify(loaded));
+    }
+    return loaded;
   } catch (err) {
     console.warn('Could not read wallet from Firestore:', err);
-    return null;
+    return cachedWallet;
   }
+}
+
+/**
+ * Fetch portfolio holdings from Firestore with localStorage fallback.
+ */
+export async function getFirestorePortfolio(userId: string): Promise<PortfolioDoc> {
+  const emptyPortfolio: PortfolioDoc = {
+    user_id: userId,
+    holdings: [],
+    total_invested_paise: 0,
+    current_value_paise: 0,
+    realized_pnl_paise: 0,
+    unrealized_pnl_paise: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  let cachedPortfolio: PortfolioDoc | null = null;
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(`naytra_portfolio_${userId}`);
+    if (raw) {
+      try {
+        cachedPortfolio = JSON.parse(raw) as PortfolioDoc;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  try {
+    const ref = doc(db, 'portfolios', userId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return cachedPortfolio || emptyPortfolio;
+    const data = snap.data() as PortfolioDoc;
+    const normalized: PortfolioDoc = {
+      ...emptyPortfolio,
+      ...data,
+      holdings: Array.isArray(data.holdings) ? data.holdings : [],
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_portfolio_${userId}`, JSON.stringify(normalized));
+    }
+    return normalized;
+  } catch (err) {
+    console.warn('Could not read portfolio from Firestore (using local cache):', err);
+    return cachedPortfolio || emptyPortfolio;
+  }
+}
+
+/**
+ * Fetch recent virtual orders from Firestore with localStorage fallback.
+ */
+export async function getFirestoreOrders(userId: string): Promise<OrderHistoryItem[]> {
+  let cachedOrders: OrderHistoryItem[] = [];
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(`naytra_orders_${userId}`);
+    if (raw) {
+      try {
+        cachedOrders = JSON.parse(raw) as OrderHistoryItem[];
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  try {
+    const ref = doc(db, 'orders', userId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return cachedOrders;
+    const data = snap.data() as OrderDoc;
+    const list = Array.isArray(data.recent_orders) ? data.recent_orders : [];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_orders_${userId}`, JSON.stringify(list));
+    }
+    return list;
+  } catch (err) {
+    console.warn('Could not read orders from Firestore (using local cache):', err);
+    return cachedOrders;
+  }
+}
+
+/**
+ * Fetch user's watchlist symbols from Firestore with localStorage fallback.
+ */
+export async function getFirestoreWatchlist(userId: string): Promise<string[]> {
+  const defaultSymbols = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'ITC'];
+  let cachedSymbols: string[] | null = null;
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(`naytra_watchlist_${userId}`);
+    if (raw) {
+      try {
+        cachedSymbols = JSON.parse(raw) as string[];
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  try {
+    const ref = doc(db, 'watchlists', userId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return cachedSymbols || defaultSymbols;
+    const data = snap.data() as WatchlistDoc;
+    const symbols = Array.isArray(data.symbols) ? data.symbols : defaultSymbols;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`naytra_watchlist_${userId}`, JSON.stringify(symbols));
+    }
+    return symbols;
+  } catch (err) {
+    console.warn('Could not read watchlist from Firestore (using local cache):', err);
+    return cachedSymbols || defaultSymbols;
+  }
+}
+
+/**
+ * Adds or removes a symbol in user's watchlist.
+ */
+export async function toggleWatchlistSymbol(userId: string, symbol: string): Promise<string[]> {
+  const sym = symbol.toUpperCase();
+  const current = await getFirestoreWatchlist(userId);
+  const exists = current.includes(sym);
+  const next = exists ? current.filter((s) => s !== sym) : [sym, ...current];
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`naytra_watchlist_${userId}`, JSON.stringify(next));
+  }
+
+  try {
+    const ref = doc(db, 'watchlists', userId);
+    await setDoc(
+      ref,
+      {
+        user_id: userId,
+        symbols: next,
+        updated_at: Timestamp.now(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Deferred syncing watchlist to Firestore:', err);
+  }
+  return next;
+}
+
+export interface PaperTradeInput {
+  symbol: string;
+  name: string;
+  side: 'BUY' | 'SELL';
+  orderMode: 'Delivery' | 'Intraday';
+  priceType: 'Market' | 'Limit';
+  quantity: number;
+  executionPriceInr: number;
+}
+
+/**
+ * Executes a virtual paper BUY or SELL order in integer paise.
+ * Atomically updates portfolio holdings, double-entry ledger, wallet balance, and order history.
+ */
+export async function executePaperTradeInFirestore(
+  userId: string,
+  trade: PaperTradeInput
+): Promise<{
+  wallet: WalletDoc;
+  portfolio: PortfolioDoc;
+  orders: OrderHistoryItem[];
+  executedOrder: OrderHistoryItem;
+}> {
+  const qty = Math.floor(trade.quantity);
+  if (!Number.isFinite(qty) || qty < 1) {
+    throw new Error('Quantity must be at least 1 share.');
+  }
+  if (!Number.isFinite(trade.executionPriceInr) || trade.executionPriceInr <= 0) {
+    throw new Error('Execution price must be greater than ₹0.');
+  }
+
+  const pricePaise = Math.round(trade.executionPriceInr * 100);
+  const totalPaise = pricePaise * qty;
+  const sym = trade.symbol.toUpperCase();
+
+  const [existingWallet, existingPortfolio, existingOrders] = await Promise.all([
+    getFirestoreWallet(userId),
+    getFirestorePortfolio(userId),
+    getFirestoreOrders(userId),
+  ]);
+
+  const nowIso = new Date().toISOString();
+  const currentWallet: WalletDoc = existingWallet || {
+    user_id: userId,
+    balance_paise: SIGNUP_BONUS_PAISE,
+    locked_paise: 0,
+    total_cash_paise: SIGNUP_BONUS_PAISE,
+    initial_grant_paise: SIGNUP_BONUS_PAISE,
+    balance_inr: SIGNUP_BONUS_PAISE / 100,
+    locked_inr: 0,
+    total_cash_inr: SIGNUP_BONUS_PAISE / 100,
+    initial_grant_inr: SIGNUP_BONUS_PAISE / 100,
+    currency: 'INR',
+    is_virtual: true,
+    created_at: nowIso,
+    updated_at: nowIso,
+  };
+
+  const currentCashPaise = currentWallet.balance_paise ?? currentWallet.total_cash_paise ?? SIGNUP_BONUS_PAISE;
+
+  if (trade.side === 'BUY' && totalPaise > currentCashPaise) {
+    throw new Error('Insufficient virtual balance to execute this buy order.');
+  }
+
+  const holdings = [...(existingPortfolio.holdings || [])];
+  const existingIdx = holdings.findIndex(
+    (h) => h.symbol.toUpperCase() === sym && (h.order_mode || 'Delivery') === trade.orderMode
+  );
+
+  let realizedDeltaPaise = 0;
+
+  if (trade.side === 'BUY') {
+    if (existingIdx >= 0) {
+      const prev = holdings[existingIdx];
+      const nextQty = prev.quantity + qty;
+      const nextInvested = prev.invested_paise + totalPaise;
+      holdings[existingIdx] = {
+        ...prev,
+        name: trade.name || prev.name,
+        quantity: nextQty,
+        invested_paise: nextInvested,
+        avg_price_paise: Math.round(nextInvested / nextQty),
+        order_mode: trade.orderMode,
+      };
+    } else {
+      holdings.push({
+        symbol: sym,
+        name: trade.name,
+        quantity: qty,
+        avg_price_paise: pricePaise,
+        invested_paise: totalPaise,
+        order_mode: trade.orderMode,
+      });
+    }
+  } else {
+    if (existingIdx < 0 || holdings[existingIdx].quantity < qty) {
+      const avail = existingIdx >= 0 ? holdings[existingIdx].quantity : 0;
+      throw new Error(`Insufficient ${trade.orderMode} shares for ${sym}. Available: ${avail}.`);
+    }
+    const prev = holdings[existingIdx];
+    const remainingQty = prev.quantity - qty;
+    realizedDeltaPaise = (pricePaise - prev.avg_price_paise) * qty;
+    if (remainingQty <= 0) {
+      holdings.splice(existingIdx, 1);
+    } else {
+      holdings[existingIdx] = {
+        ...prev,
+        quantity: remainingQty,
+        invested_paise: prev.avg_price_paise * remainingQty,
+      };
+    }
+  }
+
+  const nextCashPaise = trade.side === 'BUY' ? currentCashPaise - totalPaise : currentCashPaise + totalPaise;
+  const totalInvestedPaise = holdings.reduce((sum, h) => sum + h.invested_paise, 0);
+
+  const nextWallet: WalletDoc = {
+    ...currentWallet,
+    balance_paise: nextCashPaise,
+    total_cash_paise: nextCashPaise,
+    balance_inr: nextCashPaise / 100,
+    total_cash_inr: nextCashPaise / 100,
+    updated_at: nowIso,
+  };
+
+  const nextPortfolio: PortfolioDoc = {
+    ...existingPortfolio,
+    user_id: userId,
+    holdings,
+    total_invested_paise: totalInvestedPaise,
+    current_value_paise: totalInvestedPaise,
+    realized_pnl_paise: (existingPortfolio.realized_pnl_paise || 0) + realizedDeltaPaise,
+    updated_at: nowIso,
+  };
+
+  const executedOrder: OrderHistoryItem = {
+    order_id: `ord_${Date.now()}_${sym}`,
+    symbol: sym,
+    name: trade.name,
+    side: trade.side,
+    order_mode: trade.orderMode,
+    price_type: trade.priceType,
+    quantity: qty,
+    price_paise: pricePaise,
+    total_paise: totalPaise,
+    status: 'EXECUTED',
+    created_at: nowIso,
+  };
+
+  const nextOrders = [executedOrder, ...existingOrders].slice(0, 50);
+
+  // Persist local caches immediately so UI stays consistent even offline
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`naytra_wallet_${userId}`, JSON.stringify(nextWallet));
+    localStorage.setItem(`naytra_portfolio_${userId}`, JSON.stringify(nextPortfolio));
+    localStorage.setItem(`naytra_orders_${userId}`, JSON.stringify(nextOrders));
+  }
+
+  // Record ledger & wallet + persist portfolio & orders to Firestore
+  await recordTransactionInLedger(userId, {
+    type: trade.side === 'BUY' ? 'TRADE_BUY' : 'TRADE_SELL',
+    amount_paise: totalPaise,
+    balance_after_paise: nextCashPaise,
+    description: `Virtual ${trade.side} (${trade.orderMode}) ${qty} ${sym} @ ₹${trade.executionPriceInr.toFixed(2)}`,
+    reference_id: executedOrder.order_id,
+  });
+
+  try {
+    const now = Timestamp.now();
+    await Promise.all([
+      setDoc(
+        doc(db, 'portfolios', userId),
+        {
+          user_id: userId,
+          holdings,
+          total_invested_paise: totalInvestedPaise,
+          current_value_paise: totalInvestedPaise,
+          realized_pnl_paise: nextPortfolio.realized_pnl_paise,
+          updated_at: now,
+        },
+        { merge: true }
+      ),
+      setDoc(
+        doc(db, 'orders', userId),
+        {
+          user_id: userId,
+          orders_count: nextOrders.length,
+          recent_orders: nextOrders,
+          updated_at: now,
+        },
+        { merge: true }
+      ),
+    ]);
+  } catch (err) {
+    console.warn('Deferred syncing portfolio/orders to Firestore (cached locally):', err);
+  }
+
+  return {
+    wallet: nextWallet,
+    portfolio: nextPortfolio,
+    orders: nextOrders,
+    executedOrder,
+  };
 }
 
 /**

@@ -1,45 +1,218 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card3D } from '../design/Card3D';
 import { Tabs } from '../design/Tabs';
-import { Input } from '../design/Input';
 import { Skeleton } from '../design/Skeleton';
-import { Search, TrendingUp, TrendingDown } from 'lucide-react';
+import { Eye, EyeOff, Briefcase, TrendingUp, TrendingDown } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { fetchMarketTickers, MarketTicker } from '../services/marketService';
+import {
+  getFirestoreWallet,
+  getFirestorePortfolio,
+  getFirestoreWatchlist,
+  toggleWatchlistSymbol,
+  executePaperTradeInFirestore,
+  type WalletDoc,
+  type PortfolioDoc,
+} from '../services/firestoreService';
+import { HoldingsTable, type HoldingsRowData } from '../components/holdings/HoldingsTable';
+import { OrderTicketPanel } from '../components/holdings/OrderTicketPanel';
 import { StockChartModal } from '../components/market/StockChartModal';
 
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
+
+function formatINR(value: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function signedINR(value: number): string {
+  const prefix = value >= 0 ? '+' : '';
+  return `${prefix}${formatINR(value)}`;
+}
+
+function signedPct(pct: number): string {
+  const prefix = pct >= 0 ? '+' : '';
+  return `${prefix}${pct.toFixed(2)}%`;
+}
+
+/* ── Component ────────────────────────────────────────────────────────────── */
+
 export const HoldingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('all');
-  const [search, setSearch] = useState('');
+  const { user } = useAuth();
+  const uid = user?.uid;
+
+  /* State */
   const [tickers, setTickers] = useState<MarketTicker[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [selectedStock, setSelectedStock] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletDoc | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioDoc | null>(null);
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('holdings');
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [chartSymbol, setChartSymbol] = useState<string | null>(null);
+  const [hideValues, setHideValues] = useState(false);
+
+  /* ── Data fetching ──────────────────────────────────────────────────────── */
+
+  const refreshData = useCallback(async () => {
+    if (!uid) return;
+    try {
+      const [tickerData, walletData, portfolioData, watchlistData] = await Promise.all([
+        fetchMarketTickers(),
+        getFirestoreWallet(uid),
+        getFirestorePortfolio(uid),
+        getFirestoreWatchlist(uid),
+      ]);
+      if (tickerData?.length) setTickers(tickerData);
+      setWallet(walletData);
+      setPortfolio(portfolioData);
+      setWatchlistSymbols(watchlistData);
+    } catch (err) {
+      console.warn('HoldingsPage data refresh error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [uid]);
 
   useEffect(() => {
-    fetchMarketTickers()
-      .then((data) => {
-        if (data && data.length > 0) setTickers(data);
-        setLoading(false);
+    refreshData();
+  }, [refreshData]);
+
+  /* ── Ticker lookup map ──────────────────────────────────────────────────── */
+
+  const tickerMap = useMemo(() => {
+    const map = new Map<string, MarketTicker>();
+    tickers.forEach((t) => map.set(t.symbol.toUpperCase(), t));
+    return map;
+  }, [tickers]);
+
+  /* ── Computed portfolio metrics ─────────────────────────────────────────── */
+
+  const holdings = portfolio?.holdings ?? [];
+
+  const holdingsRows: HoldingsRowData[] = useMemo(() => {
+    return holdings
+      .map((h) => {
+        const ticker = tickerMap.get(h.symbol.toUpperCase());
+        if (!ticker) return null;
+        const avgPriceInr = h.avg_price_paise / 100;
+        const investedInr = h.invested_paise / 100;
+        const currentValueInr = ticker.price * h.quantity;
+        const totalReturnInr = currentValueInr - investedInr;
+        const totalReturnPct = investedInr > 0 ? (totalReturnInr / investedInr) * 100 : 0;
+        return {
+          symbol: h.symbol,
+          name: h.name || ticker.name,
+          sector: ticker.sector,
+          ticker,
+          quantity: h.quantity,
+          avgPriceInr,
+          investedInr,
+          currentValueInr,
+          totalReturnInr,
+          totalReturnPct,
+          orderMode: h.order_mode,
+        } satisfies HoldingsRowData;
       })
-      .catch(() => setLoading(false));
+      .filter(Boolean) as HoldingsRowData[];
+  }, [holdings, tickerMap]);
+
+  const exploreRows: HoldingsRowData[] = useMemo(() => {
+    return tickers.map((t) => ({
+      symbol: t.symbol,
+      name: t.name,
+      sector: t.sector,
+      ticker: t,
+    }));
+  }, [tickers]);
+
+  const totalCurrentValueInr = holdingsRows.reduce((s, r) => s + (r.currentValueInr ?? 0), 0);
+  const totalInvestedInr = holdingsRows.reduce((s, r) => s + (r.investedInr ?? 0), 0);
+  const totalReturnInr = totalCurrentValueInr - totalInvestedInr;
+  const totalReturnPct = totalInvestedInr > 0 ? (totalReturnInr / totalInvestedInr) * 100 : 0;
+
+  /* 1D returns: sum of (day_change * quantity) for each holding */
+  const oneDayReturnInr = holdingsRows.reduce(
+    (s, r) => s + (r.ticker.change ?? 0) * (r.quantity ?? 0),
+    0,
+  );
+  const oneDayReturnPct =
+    totalCurrentValueInr > 0
+      ? (oneDayReturnInr / (totalCurrentValueInr - oneDayReturnInr)) * 100
+      : 0;
+
+  /* ── Selected ticker for OrderTicketPanel ────────────────────────────────── */
+
+  const selectedTicker = selectedSymbol ? tickerMap.get(selectedSymbol.toUpperCase()) ?? null : null;
+
+  /* ── Callbacks ──────────────────────────────────────────────────────────── */
+
+  const handleSelectStock = useCallback((symbol: string) => {
+    setSelectedSymbol(symbol);
   }, []);
 
-  // Filter tickers based on search and tab
-  const filteredTickers = tickers.filter((t) => {
-    const matchesSearch =
-      t.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      t.name.toLowerCase().includes(search.toLowerCase());
+  const handleOpenChart = useCallback((symbol: string) => {
+    setChartSymbol(symbol);
+  }, []);
 
-    if (!matchesSearch) return false;
+  const handleToggleWatchlist = useCallback(
+    async (symbol: string) => {
+      if (!uid) return;
+      const next = await toggleWatchlistSymbol(uid, symbol);
+      setWatchlistSymbols(next);
+    },
+    [uid],
+  );
 
-    if (activeTab === 'gainers') return (t.change_pct ?? 0) > 0;
-    if (activeTab === 'losers') return (t.change_pct ?? 0) < 0;
-    if (activeTab === 'holdings') return t.symbol === 'RELIANCE' || t.symbol === 'INFY';
-    return true;
-  });
+  const handleExecuteOrder = useCallback(
+    async (payload: {
+      symbol: string;
+      name: string;
+      side: 'BUY' | 'SELL';
+      orderMode: 'Delivery' | 'Intraday';
+      priceType: 'Market' | 'Limit';
+      quantity: number;
+      executionPriceInr: number;
+    }) => {
+      if (!uid) return;
+      const result = await executePaperTradeInFirestore(uid, payload);
+      setWallet(result.wallet);
+      setPortfolio(result.portfolio);
+    },
+    [uid],
+  );
+
+  /* ── Loading state ──────────────────────────────────────────────────────── */
+
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
+            Holdings & Sensex 30
+          </h1>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+          <div className="space-y-4">
+            <Skeleton width="100%" height="120px" className="rounded-xl" />
+            <Skeleton width="100%" height="320px" className="rounded-xl" />
+          </div>
+          <Skeleton width="100%" height="460px" className="rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  const cashPaise = wallet?.balance_paise ?? 0;
+  const hasHoldings = holdingsRows.length > 0;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
+    <div className="space-y-5 max-w-7xl mx-auto">
+      {/* ── Header ───────────────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
           Holdings & Sensex 30
@@ -49,118 +222,156 @@ export const HoldingsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Holdings Metric Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Card3D elevation="e2" className="p-4">
-          <span className="text-xs font-bold text-text-tertiary uppercase">Total Invested</span>
-          <p className="text-xl font-bold font-mono text-text-primary mt-1">₹4,855.00</p>
-          <span className="text-[11px] text-text-tertiary">2 Positions</span>
-        </Card3D>
-        <Card3D elevation="e2" className="p-4">
-          <span className="text-xs font-bold text-text-tertiary uppercase">Current Value</span>
-          <p className="text-xl font-bold font-mono text-text-primary mt-1">₹4,820.00</p>
-          <span className="text-[11px] text-text-tertiary">Real-time marks</span>
-        </Card3D>
-        <Card3D elevation="e2" className="p-4">
-          <span className="text-xs font-bold text-text-tertiary uppercase">Unrealized P&L</span>
-          <p className="text-xl font-bold font-mono text-brand-down mt-1">-₹35.00 (-0.72%)</p>
-          <span className="text-[11px] text-text-tertiary">Virtual return</span>
-        </Card3D>
-      </div>
+      {/* ── Two-Column Layout ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
+        {/* ━━ LEFT COLUMN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div className="space-y-4 min-w-0">
+          {/* ── Portfolio Summary Card (Groww-style) ─────────────────────── */}
+          <Card3D elevation="e2" className="p-5 border border-surface-border">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-text-tertiary uppercase tracking-wide">
+                <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Holdings ({holdingsRows.length})</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHideValues((v) => !v)}
+                aria-label={hideValues ? 'Show portfolio values' : 'Hide portfolio values'}
+                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-inset transition-colors"
+              >
+                {hideValues ? (
+                  <EyeOff className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
 
-      {/* Search & Tabs */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-        <div className="w-full sm:w-72">
-          <Input
-            placeholder="Search symbol or name..."
-            leftIcon={<Search className="w-4 h-4" />}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            {hasHoldings ? (
+              <>
+                {/* Total Current Value (large) */}
+                <div className="text-2xl font-extrabold font-mono text-text-primary mb-3">
+                  {hideValues ? '₹••••••' : formatINR(totalCurrentValueInr)}
+                </div>
+
+                {/* Metrics Row */}
+                <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs">
+                  <div>
+                    <span className="text-text-tertiary">Invested value</span>
+                    <p className="font-mono font-bold text-text-secondary mt-0.5">
+                      {hideValues ? '₹••••' : formatINR(totalInvestedInr)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-text-tertiary">1D returns</span>
+                    <p
+                      className={`font-mono font-bold mt-0.5 ${
+                        oneDayReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
+                      }`}
+                    >
+                      {hideValues
+                        ? '₹••••'
+                        : `${signedINR(oneDayReturnInr)} (${signedPct(oneDayReturnPct)})`}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-text-tertiary">Total returns</span>
+                    <p
+                      className={`font-mono font-bold mt-0.5 ${
+                        totalReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
+                      }`}
+                    >
+                      {hideValues
+                        ? '₹••••'
+                        : `${signedINR(totalReturnInr)} (${signedPct(totalReturnPct)})`}
+                    </p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="py-6 text-center space-y-2">
+                <TrendingUp className="w-8 h-8 text-text-tertiary mx-auto" aria-hidden="true" />
+                <p className="text-sm font-semibold text-text-secondary">No virtual holdings yet</p>
+                <p className="text-xs text-text-tertiary max-w-xs mx-auto">
+                  Switch to the "Sensex 30" tab and buy your first stock to start paper trading!
+                </p>
+              </div>
+            )}
+          </Card3D>
+
+          {/* ── Holdings / Sensex 30 Tabs ────────────────────────────────── */}
+          <Tabs
+            items={[
+              { id: 'holdings', label: 'My Holdings' },
+              { id: 'explore', label: 'Sensex 30' },
+            ]}
+            value={activeTab}
+            onValueChange={setActiveTab}
           />
+
+          {/* ── Table ────────────────────────────────────────────────────── */}
+          {activeTab === 'holdings' ? (
+            hasHoldings ? (
+              <HoldingsTable
+                mode="holdings"
+                rows={holdingsRows}
+                selectedSymbol={selectedSymbol}
+                hideValues={hideValues}
+                watchlistSymbols={watchlistSymbols}
+                onSelectStock={handleSelectStock}
+                onOpenChart={handleOpenChart}
+                onToggleWatchlist={handleToggleWatchlist}
+              />
+            ) : (
+              <Card3D elevation="e1" className="p-10 text-center border border-surface-border">
+                <TrendingDown className="w-8 h-8 text-text-tertiary mx-auto mb-3" aria-hidden="true" />
+                <p className="text-sm font-semibold text-text-secondary">Your portfolio is empty</p>
+                <p className="text-xs text-text-tertiary mt-1">
+                  Explore the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('explore')}
+                    className="text-brand-up font-bold underline underline-offset-2 cursor-pointer"
+                  >
+                    Sensex 30
+                  </button>{' '}
+                  tab to pick your first stock.
+                </p>
+              </Card3D>
+            )
+          ) : (
+            <HoldingsTable
+              mode="explore"
+              rows={exploreRows}
+              selectedSymbol={selectedSymbol}
+              hideValues={false}
+              watchlistSymbols={watchlistSymbols}
+              onSelectStock={handleSelectStock}
+              onOpenChart={handleOpenChart}
+              onToggleWatchlist={handleToggleWatchlist}
+            />
+          )}
         </div>
 
-        <Tabs
-          items={[
-            { id: 'all', label: 'All 30' },
-            { id: 'holdings', label: 'My Holdings' },
-            { id: 'gainers', label: 'Gainers' },
-            { id: 'losers', label: 'Losers' },
-          ]}
-          value={activeTab}
-          onValueChange={setActiveTab}
-        />
+        {/* ━━ RIGHT COLUMN (Order Ticket) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        <div className="lg:sticky lg:top-6">
+          <OrderTicketPanel
+            selectedTicker={selectedTicker}
+            availableCashPaise={cashPaise}
+            holdings={holdings}
+            onClearSelection={() => setSelectedSymbol(null)}
+            onOpenChart={handleOpenChart}
+            onExecuteOrder={handleExecuteOrder}
+          />
+        </div>
       </div>
 
-      {/* Stock List Items */}
-      <div className="space-y-3">
-        {filteredTickers.map((item) => {
-          const isUp = (item.change_pct ?? 0) >= 0;
-          return (
-            <Card3D
-              key={item.symbol}
-              elevation="e1"
-              onClick={() => setSelectedStock(item.symbol)}
-              className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-purple-500/50 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-surface-inset flex items-center justify-center font-bold text-xs text-text-primary font-mono border border-surface-border">
-                  {item.symbol.slice(0, 3)}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-text-primary">{item.symbol}</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title="ML Forecast Active" />
-                    <span className="text-[10px] text-text-tertiary px-1.5 py-0.5 rounded bg-surface-raised border border-surface-border">
-                      {item.sector}
-                    </span>
-                  </div>
-                  <div className="text-xs text-text-tertiary">{item.name}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between sm:justify-end gap-6">
-                <div className="text-right">
-                  <span className="text-sm font-bold font-mono text-text-primary block">
-                    ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span
-                    className={`text-xs font-semibold inline-flex items-center gap-0.5 ${
-                      isUp ? 'text-brand-up' : 'text-brand-down'
-                    }`}
-                  >
-                    {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                    {isUp ? '+' : ''}{item.change_pct}%
-                  </span>
-                </div>
-              </div>
-            </Card3D>
-          );
-        })}
-
-        {/* Skeleton loading row */}
-        {loading && (
-          <div className="p-4 rounded-xl bg-surface-raised border border-surface-border opacity-50 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Skeleton width="40px" height="40px" className="rounded-xl" />
-              <div className="space-y-1.5">
-                <Skeleton width="90px" height="16px" />
-                <Skeleton width="140px" height="12px" />
-              </div>
-            </div>
-            <div className="space-y-1.5 text-right">
-              <Skeleton width="70px" height="16px" />
-              <Skeleton width="50px" height="12px" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Stock Chart Modal with Forecasts & LLM Reasoning */}
-      {selectedStock && (
+      {/* ── Stock Chart Modal ────────────────────────────────────────────── */}
+      {chartSymbol && (
         <StockChartModal
-          symbol={selectedStock}
-          isOpen={!!selectedStock}
-          onClose={() => setSelectedStock(null)}
+          symbol={chartSymbol}
+          isOpen={!!chartSymbol}
+          onClose={() => setChartSymbol(null)}
         />
       )}
     </div>
