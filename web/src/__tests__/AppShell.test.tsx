@@ -91,14 +91,20 @@ describe('AppShell & Navigation', () => {
     const holdingsLinks = screen.getAllByRole('link', { name: /Holdings/i });
     fireEvent.click(holdingsLinks[0]);
 
-    expect(await screen.findByRole('heading', { name: /Holdings & Sensex 30/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /^Holdings$/i })).toBeInTheDocument();
     const mainEl = document.querySelector('main');
     expect(mainEl).toHaveClass('overflow-x-clip');
     expect(mainEl).not.toHaveClass('overflow-x-hidden');
     expect(screen.getByTestId('holdings-sticky-panel')).toHaveClass('lg:sticky');
 
-    // Outer wrapper must have w-full so switching My Holdings <-> Sensex 30 keeps card sizes identical
-    const heading = screen.getByRole('heading', { name: /Holdings & Sensex 30/i });
+    // Segmented controls show All, Delivery, Intraday without Sensex 30 explore tab
+    expect(screen.getByRole('tab', { name: /^All \(/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Delivery \(/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Intraday \(/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Sensex 30/i })).not.toBeInTheDocument();
+
+    // Outer wrapper must have w-full so switching segments keeps card sizes identical
+    const heading = screen.getByRole('heading', { name: /^Holdings$/i });
     const pageRoot = heading.closest('.max-w-7xl');
     expect(pageRoot).toHaveClass('w-full');
 

@@ -22,7 +22,7 @@ export interface HoldingsTableProps {
   rows: HoldingsRowData[];
   selectedSymbol: string | null;
   hideValues?: boolean;
-  onSelectStock: (symbol: string) => void;
+  onSelectStock: (symbol: string, orderMode?: 'Delivery' | 'Intraday') => void;
   onOpenChart: (symbol: string) => void;
 }
 
@@ -226,7 +226,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   <td className="px-4 py-3.5 align-middle">
                     <button
                       type="button"
-                      onClick={() => onSelectStock(row.symbol)}
+                      onClick={() => onSelectStock(row.symbol, row.orderMode)}
                       className="text-left group focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-marigold rounded"
                     >
                       <div className="font-bold text-text-primary group-hover:text-brand-up transition-colors flex items-center gap-1.5">

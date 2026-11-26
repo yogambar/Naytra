@@ -1,5 +1,4 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
 import { Sparkles, ChevronRight } from 'lucide-react';
 import { Sparkline } from '../../design/Sparkline';
 import type { PredictionTicker } from '../../services/marketService';
@@ -39,12 +38,14 @@ export const TopMoversSection: React.FC<TopMoversSectionProps> = ({
   preferredSectors,
   onSelectStock,
 }) => {
+  const [showAll, setShowAll] = useState(false);
+
   const sectorFiltered =
     selectedSector === 'ALL'
       ? tickers
       : tickers.filter((t) => t.sector === selectedSector);
 
-  const visibleRows = React.useMemo(() => {
+  const sortedRows = React.useMemo(() => {
     const base = [...sectorFiltered];
     if (activeTab === 'gainers') {
       base.sort((a, b) => b.change_pct - a.change_pct);
@@ -67,8 +68,10 @@ export const TopMoversSection: React.FC<TopMoversSectionProps> = ({
         return score(b) - score(a);
       });
     }
-    return base.slice(0, 6);
+    return base;
   }, [sectorFiltered, activeTab, heldSymbols, searchedSymbols, preferredSectors]);
+
+  const visibleRows = showAll ? sortedRows : sortedRows.slice(0, 6);
 
   return (
     <section aria-labelledby="top-movers-heading" className="space-y-3">
@@ -76,12 +79,16 @@ export const TopMoversSection: React.FC<TopMoversSectionProps> = ({
         <h2 id="top-movers-heading" className="text-lg font-extrabold text-text-primary tracking-tight">
           Top movers today
         </h2>
-        <Link
-          to="/holdings"
-          className="inline-flex items-center gap-0.5 text-xs font-bold text-brand-up hover:underline"
-        >
-          See more <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
-        </Link>
+        {sortedRows.length > 6 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="inline-flex items-center gap-0.5 text-xs font-bold text-brand-up hover:underline cursor-pointer"
+          >
+            {showAll ? 'Show top 6' : `See all ${sortedRows.length} stocks`}{' '}
+            <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {/* Filter Pills + Sector Dropdown (matches Groww layout) */}

@@ -16,6 +16,7 @@ import type { HoldingPositionDoc } from '../../services/firestoreService';
 
 export interface OrderTicketPanelProps {
   selectedTicker: MarketTicker | null;
+  preferredOrderMode?: 'Delivery' | 'Intraday';
   availableCashPaise: number;
   holdings: HoldingPositionDoc[];
   onClearSelection: () => void;
@@ -44,6 +45,7 @@ function formatINR(value: number): string {
 
 export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
   selectedTicker,
+  preferredOrderMode,
   availableCashPaise,
   holdings,
   onClearSelection,
@@ -69,6 +71,9 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
     setStatusMsg(null);
     if (selectedTicker) {
       setLimitPriceText(selectedTicker.price.toFixed(2));
+      if (preferredOrderMode) {
+        setOrderMode(preferredOrderMode);
+      }
       const held = holdings.find(
         (h) => h.symbol.toUpperCase() === selectedTicker.symbol.toUpperCase()
       );
@@ -77,7 +82,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
       }
       setQtyText('1');
     }
-  }, [selectedTicker?.symbol]);
+  }, [selectedTicker?.symbol, preferredOrderMode]);
 
   const cashInr = availableCashPaise / 100;
 
@@ -101,7 +106,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
           <div className="space-y-1">
             <h2 className="text-sm font-bold text-text-primary">Select a stock to get started</h2>
             <p className="text-xs text-text-tertiary max-w-[220px]">
-              Choose any holding or Sensex 30 stock from the table to buy or sell.
+              Choose any holding from the table to buy or sell.
             </p>
           </div>
         </div>

@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Card3D } from '../design/Card3D';
 import { Tabs } from '../design/Tabs';
 import { Skeleton } from '../design/Skeleton';
-import { Eye, EyeOff, Briefcase, TrendingUp, TrendingDown } from 'lucide-react';
+import { Eye, EyeOff, Briefcase, TrendingDown } from 'lucide-react';
 import { useSyncedWallet } from '../context/WalletContext';
 import { fetchMarketTickers, MarketTicker } from '../services/marketService';
 import { HoldingsTable, type HoldingsRowData } from '../components/holdings/HoldingsTable';
 import { OrderTicketPanel } from '../components/holdings/OrderTicketPanel';
 import { StockChartModal } from '../components/market/StockChartModal';
+
+type HoldingsSegment = 'all' | 'delivery' | 'intraday';
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -43,12 +46,15 @@ export const HoldingsPage: React.FC = () => {
   /* Local UI & market ticker state */
   const [tickers, setTickers] = useState<MarketTicker[]>([]);
   const [loadingTickers, setLoadingTickers] = useState(true);
-  const [activeTab, setActiveTab] = useState('holdings');
+  const [segment, setSegment] = useState<HoldingsSegment>('all');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [selectedOrderMode, setSelectedOrderMode] = useState<'Delivery' | 'Intraday' | undefined>(
+    undefined
+  );
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
   const [hideValues, setHideValues] = useState(false);
 
-  /* ── Fetch live Sensex 30 prices & refresh synced wallet ────────────────── */
+  /* ── Fetch live market prices & refresh synced wallet ───────────────────── */
 
   useEffect(() => {
     let cancelled = false;
@@ -110,32 +116,39 @@ export const HoldingsPage: React.FC = () => {
         currentValueInr,
         totalReturnInr,
         totalReturnPct,
-        orderMode: h.order_mode,
+        orderMode: h.order_mode || 'Delivery',
       } satisfies HoldingsRowData;
     });
   }, [holdings, tickerMap]);
 
-  const exploreRows: HoldingsRowData[] = useMemo(() => {
-    return tickers.map((t) => ({
-      symbol: t.symbol,
-      name: t.name,
-      sector: t.sector,
-      ticker: t,
-    }));
-  }, [tickers]);
+  const deliveryRows = useMemo(
+    () => holdingsRows.filter((r) => (r.orderMode || 'Delivery') === 'Delivery'),
+    [holdingsRows]
+  );
 
-  const totalCurrentValueInr = holdingsRows.reduce((s, r) => s + (r.currentValueInr ?? 0), 0);
-  const totalInvestedInr = holdingsRows.reduce((s, r) => s + (r.investedInr ?? 0), 0);
+  const intradayRows = useMemo(
+    () => holdingsRows.filter((r) => r.orderMode === 'Intraday'),
+    [holdingsRows]
+  );
+
+  const visibleRows = useMemo(() => {
+    if (segment === 'delivery') return deliveryRows;
+    if (segment === 'intraday') return intradayRows;
+    return holdingsRows;
+  }, [segment, holdingsRows, deliveryRows, intradayRows]);
+
+  const totalCurrentValueInr = visibleRows.reduce((s, r) => s + (r.currentValueInr ?? 0), 0);
+  const totalInvestedInr = visibleRows.reduce((s, r) => s + (r.investedInr ?? 0), 0);
   const totalReturnInr = totalCurrentValueInr - totalInvestedInr;
   const totalReturnPct = totalInvestedInr > 0 ? (totalReturnInr / totalInvestedInr) * 100 : 0;
 
-  /* 1D returns: sum of (day_change * quantity) for each holding */
-  const oneDayReturnInr = holdingsRows.reduce(
+  /* 1D returns: sum of (day_change * quantity) for each holding in active segment */
+  const oneDayReturnInr = visibleRows.reduce(
     (s, r) => s + (r.ticker.change ?? 0) * (r.quantity ?? 0),
     0
   );
   const oneDayReturnPct =
-    totalCurrentValueInr > 0
+    totalCurrentValueInr > 0 && totalCurrentValueInr - oneDayReturnInr !== 0
       ? (oneDayReturnInr / (totalCurrentValueInr - oneDayReturnInr)) * 100
       : 0;
 
@@ -145,9 +158,10 @@ export const HoldingsPage: React.FC = () => {
 
   /* ── Callbacks ──────────────────────────────────────────────────────────── */
 
-  const handleSelectStock = useCallback((symbol: string) => {
+  const handleSelectStock = useCallback((symbol: string, mode?: 'Delivery' | 'Intraday') => {
     setSelectedSymbol(symbol);
-  }, []);
+    setSelectedOrderMode(mode || (segment === 'intraday' ? 'Intraday' : segment === 'delivery' ? 'Delivery' : undefined));
+  }, [segment]);
 
   const handleOpenChart = useCallback((symbol: string) => {
     setChartSymbol(symbol);
@@ -169,17 +183,22 @@ export const HoldingsPage: React.FC = () => {
   );
 
   const cashPaise = wallet.balance_paise;
-  const hasHoldings = holdingsRows.length > 0;
+  const segmentHeadingLabel =
+    segment === 'delivery'
+      ? `Delivery (${visibleRows.length})`
+      : segment === 'intraday'
+        ? `Intraday (${visibleRows.length})`
+        : `Holdings (${visibleRows.length})`;
 
   return (
     <div className="w-full space-y-5 max-w-7xl mx-auto">
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
-          Holdings & Sensex 30
+          Holdings
         </h1>
         <p className="text-sm text-text-secondary mt-0.5">
-          Track portfolio positions and explore all 30 constituent stocks
+          Track and manage your Delivery and Intraday stock positions
         </p>
       </div>
 
@@ -187,12 +206,12 @@ export const HoldingsPage: React.FC = () => {
       <div className="w-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
         {/* ━━ LEFT COLUMN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <div className="space-y-4 min-w-0 w-full">
-          {/* ── Portfolio Summary Card (Groww-style) ─────────────────────── */}
+          {/* ── Portfolio Summary Card (Groww-style, consistent height across segments) */}
           <Card3D elevation="e2" interactive={false} className="w-full p-5 sm:p-6 border border-surface-border">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-xs font-bold text-text-tertiary uppercase tracking-wider">
                 <Briefcase className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Holdings ({holdingsRows.length})</span>
+                <span>{segmentHeadingLabel}</span>
               </div>
               <button
                 type="button"
@@ -208,107 +227,90 @@ export const HoldingsPage: React.FC = () => {
               </button>
             </div>
 
-            {hasHoldings ? (
-              <>
-                <div className="text-2xl sm:text-[26px] font-extrabold font-mono text-text-primary tracking-tight tabular-nums">
-                  {hideValues ? '₹••••••' : formatINR(totalCurrentValueInr)}
-                </div>
+            <div className="text-2xl sm:text-[26px] font-extrabold font-mono text-text-primary tracking-tight tabular-nums">
+              {hideValues ? '₹••••••' : formatINR(totalCurrentValueInr)}
+            </div>
 
-                <div className="border-t border-dashed border-surface-border my-4" />
+            <div className="border-t border-dashed border-surface-border my-4" />
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start text-xs">
-                  <div className="text-left">
-                    <span className="text-text-tertiary font-medium">Invested value</span>
-                    <p className="text-sm font-mono font-bold text-text-primary mt-1 tabular-nums">
-                      {hideValues ? '₹••••' : formatINR(totalInvestedInr)}
-                    </p>
-                  </div>
-                  <div className="sm:text-right">
-                    <span className="text-text-tertiary font-medium">1D returns</span>
-                    <p
-                      className={`text-sm font-mono font-bold mt-1 tabular-nums ${
-                        oneDayReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
-                      }`}
-                    >
-                      {hideValues
-                        ? '₹••••'
-                        : `${signedINR(oneDayReturnInr)} (${signedPct(oneDayReturnPct)})`}
-                    </p>
-                  </div>
-                  <div className="sm:text-right">
-                    <span className="text-text-tertiary font-medium">Total returns</span>
-                    <p
-                      className={`text-sm font-mono font-bold mt-1 tabular-nums ${
-                        totalReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
-                      }`}
-                    >
-                      {hideValues
-                        ? '₹••••'
-                        : `${signedINR(totalReturnInr)} (${signedPct(totalReturnPct)})`}
-                    </p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="py-6 text-center space-y-2">
-                <TrendingUp className="w-8 h-8 text-text-tertiary mx-auto" aria-hidden="true" />
-                <p className="text-sm font-semibold text-text-secondary">No holdings yet</p>
-                <p className="text-xs text-text-tertiary max-w-xs mx-auto">
-                  Switch to the &quot;Sensex 30&quot; tab and buy your first stock to start trading!
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start text-xs">
+              <div className="text-left">
+                <span className="text-text-tertiary font-medium">Invested value</span>
+                <p className="text-sm font-mono font-bold text-text-primary mt-1 tabular-nums">
+                  {hideValues ? '₹••••' : formatINR(totalInvestedInr)}
                 </p>
               </div>
-            )}
+              <div className="sm:text-right">
+                <span className="text-text-tertiary font-medium">1D returns</span>
+                <p
+                  className={`text-sm font-mono font-bold mt-1 tabular-nums ${
+                    oneDayReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
+                  }`}
+                >
+                  {hideValues
+                    ? '₹••••'
+                    : `${signedINR(oneDayReturnInr)} (${signedPct(oneDayReturnPct)})`}
+                </p>
+              </div>
+              <div className="sm:text-right">
+                <span className="text-text-tertiary font-medium">Total returns</span>
+                <p
+                  className={`text-sm font-mono font-bold mt-1 tabular-nums ${
+                    totalReturnInr >= 0 ? 'text-brand-up' : 'text-brand-down'
+                  }`}
+                >
+                  {hideValues
+                    ? '₹••••'
+                    : `${signedINR(totalReturnInr)} (${signedPct(totalReturnPct)})`}
+                </p>
+              </div>
+            </div>
           </Card3D>
 
-          {/* ── Holdings / Sensex 30 Tabs ────────────────────────────────── */}
+          {/* ── Position Segments: All | Delivery | Intraday ─────────────── */}
           <Tabs
             items={[
-              { id: 'holdings', label: 'My Holdings' },
-              { id: 'explore', label: 'Sensex 30' },
+              { id: 'all', label: `All (${holdingsRows.length})` },
+              { id: 'delivery', label: `Delivery (${deliveryRows.length})` },
+              { id: 'intraday', label: `Intraday (${intradayRows.length})` },
             ]}
-            value={activeTab}
-            onValueChange={setActiveTab}
+            value={segment}
+            onValueChange={(val) => setSegment(val as HoldingsSegment)}
           />
 
-          {/* ── Table ────────────────────────────────────────────────────── */}
+          {/* ── Holdings Table ───────────────────────────────────────────── */}
           {loadingTickers && tickers.length === 0 ? (
             <Skeleton width="100%" height="260px" className="rounded-xl" />
-          ) : activeTab === 'holdings' ? (
-            hasHoldings ? (
-              <HoldingsTable
-                mode="holdings"
-                rows={holdingsRows}
-                selectedSymbol={selectedSymbol}
-                hideValues={hideValues}
-                onSelectStock={handleSelectStock}
-                onOpenChart={handleOpenChart}
-              />
-            ) : (
-              <Card3D elevation="e1" className="p-10 text-center border border-surface-border">
-                <TrendingDown className="w-8 h-8 text-text-tertiary mx-auto mb-3" aria-hidden="true" />
-                <p className="text-sm font-semibold text-text-secondary">Your portfolio is empty</p>
-                <p className="text-xs text-text-tertiary mt-1">
-                  Explore the{' '}
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('explore')}
-                    className="text-brand-up font-bold underline underline-offset-2 cursor-pointer"
-                  >
-                    Sensex 30
-                  </button>{' '}
-                  tab to pick your first stock.
-                </p>
-              </Card3D>
-            )
-          ) : (
+          ) : visibleRows.length > 0 ? (
             <HoldingsTable
-              mode="explore"
-              rows={exploreRows}
+              mode="holdings"
+              rows={visibleRows}
               selectedSymbol={selectedSymbol}
-              hideValues={false}
+              hideValues={hideValues}
               onSelectStock={handleSelectStock}
               onOpenChart={handleOpenChart}
             />
+          ) : (
+            <Card3D elevation="e1" className="w-full p-10 text-center border border-surface-border">
+              <TrendingDown className="w-8 h-8 text-text-tertiary mx-auto mb-3" aria-hidden="true" />
+              <p className="text-sm font-semibold text-text-secondary">
+                {segment === 'intraday'
+                  ? 'No intraday positions open'
+                  : segment === 'delivery'
+                    ? 'No delivery holdings yet'
+                    : 'Your portfolio is empty'}
+              </p>
+              <p className="text-xs text-text-tertiary mt-1">
+                Explore live stocks and AI forecasts on the{' '}
+                <Link
+                  to="/dashboard"
+                  className="text-brand-up font-bold underline underline-offset-2"
+                >
+                  Market Dashboard
+                </Link>{' '}
+                to place an order.
+              </p>
+            </Card3D>
           )}
         </div>
 
@@ -319,9 +321,13 @@ export const HoldingsPage: React.FC = () => {
         >
           <OrderTicketPanel
             selectedTicker={selectedTicker}
+            preferredOrderMode={selectedOrderMode}
             availableCashPaise={cashPaise}
             holdings={holdings}
-            onClearSelection={() => setSelectedSymbol(null)}
+            onClearSelection={() => {
+              setSelectedSymbol(null);
+              setSelectedOrderMode(undefined);
+            }}
             onOpenChart={handleOpenChart}
             onExecuteOrder={handleExecuteOrder}
           />
