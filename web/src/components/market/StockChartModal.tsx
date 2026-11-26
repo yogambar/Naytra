@@ -91,39 +91,49 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   useEffect(() => {
     if (!isOpen || !symbol) return;
     let cancelled = false;
-    setLoading(true);
     setNewsLoading(true);
     setSelectedArticle(null);
     setOrderSuccessMsg(null);
 
-    // Fetch user wallet
     if (user?.uid) {
       getFirestoreWallet(user.uid).then((w) => {
         if (!cancelled && w) setWalletBalancePaise(w.total_cash_paise);
       });
     }
 
-    // Load Chart, Insights & Stock-Specific News in parallel
-    const allowForecast = timeline === '1D' && showForecast;
-    Promise.all([
-      fetchStockChart(symbol, '5m', allowForecast, timeline),
-      fetchStockInsight(symbol),
-      fetchStockNews(symbol),
-    ]).then(([chart, ins, stockNews]) => {
+    Promise.all([fetchStockInsight(symbol), fetchStockNews(symbol)]).then(
+      ([ins, stockNews]) => {
+        if (cancelled) return;
+        setInsight(ins);
+        setNews(stockNews || []);
+        setNewsLoading(false);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, symbol, user?.uid]);
+
+  // Fetch chart series per timeline (always request 1D forecasts so toggling visibility never scales the graph)
+  useEffect(() => {
+    if (!isOpen || !symbol) return;
+    let cancelled = false;
+    setLoading(true);
+    setHoveredCandle(null);
+
+    fetchStockChart(symbol, '5m', timeline === '1D', timeline).then((chart) => {
       if (cancelled) return;
       setChartData(chart);
-      setInsight(ins);
-      setNews(stockNews || []);
-      setNewsLoading(false);
       setLoading(false);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, symbol, timeline, showForecast, user?.uid]);
+  }, [isOpen, symbol, timeline]);
 
-  // Continuous animation loop for glowing purple forecast candles
+  // Continuous animation loop for glowing AI forecast candles
   useEffect(() => {
     if (!isOpen || !chartData) return;
     let animId: number;
@@ -136,7 +146,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
     animId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animId);
-  }, [isOpen, chartData]);
+  }, [isOpen, chartData, showForecast, timeline]);
 
   const drawCanvas = () => {
     if (!canvasRef.current || !chartData || chartData.candles.length === 0) return;
@@ -198,13 +208,19 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
       ctx.fillText(`₹${pVal.toFixed(1)}`, w - paddingRight + 6, y + 3);
     }
 
-    // Draw Candles with Pulsing Glow Animation
+    // Draw Candles with Pulsing Glow Animation (keep X & Y scale locked across full 1D series)
+    const shouldRenderForecast = timeline === '1D' && showForecast;
     const pulseBlur = 3 + 4 * Math.abs(Math.sin(animPhaseRef.current));
     const count = candles.length;
     const candleW = Math.max(3, (chartW / count) * 0.72);
     const stepX = chartW / count;
 
     candles.forEach((c, idx) => {
+      if (c.is_forecast && !shouldRenderForecast) {
+        (c as any)._x = null;
+        return;
+      }
+
       const x = paddingLeft + idx * stepX + stepX / 2;
       const yOpen = priceToY(c.open);
       const yClose = priceToY(c.close);
@@ -360,11 +376,17 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
         {/* Chart Viewport & Timeline Selector (1D, 1W, 1M, 1Y, 5Y) */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="inline-flex rounded-lg border border-surface-border bg-surface-inset p-0.5 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-h-[34px]">
+            <div
+              role="group"
+              aria-label="Chart timeline"
+              className="inline-flex rounded-lg border border-surface-border bg-surface-inset p-0.5 text-xs"
+            >
               {(['1D', '1W', '1M', '1Y', '5Y'] as const).map((tl) => (
                 <button
                   key={tl}
+                  type="button"
+                  aria-pressed={timeline === tl}
                   onClick={() => setTimeline(tl)}
                   className={`px-3 py-1 rounded-md font-semibold transition-colors ${
                     timeline === tl
@@ -377,17 +399,29 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
               ))}
             </div>
 
-            {timeline === '1D' && (
-              <label className="flex items-center text-xs text-purple-400 gap-1.5 cursor-pointer bg-purple-950/30 px-2.5 py-1 rounded-lg border border-purple-800/40">
-                <input
-                  type="checkbox"
-                  checked={showForecast}
-                  onChange={(e) => setShowForecast(e.target.checked)}
-                  className="rounded text-purple-600 focus:ring-0"
-                />
-                <span className="font-semibold">Purple Forecasts (#8A2BE2)</span>
-              </label>
-            )}
+            <label
+              title="Show or hide AI intraday closing predictions (1D view only)"
+              className={`flex items-center text-xs gap-1.5 px-2.5 py-1 rounded-lg border select-none transition-opacity ${
+                timeline === '1D'
+                  ? 'text-purple-300 cursor-pointer bg-purple-950/30 border-purple-800/40 opacity-100'
+                  : 'text-text-tertiary cursor-not-allowed bg-surface-inset border-surface-border opacity-40'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={showForecast}
+                disabled={timeline !== '1D'}
+                onChange={(e) => {
+                  setShowForecast(e.target.checked);
+                  if (!e.target.checked && hoveredCandle?.is_forecast) {
+                    setHoveredCandle(null);
+                  }
+                }}
+                className="rounded text-purple-600 focus:ring-0 disabled:cursor-not-allowed"
+              />
+              <span className="w-2 h-2 rounded-full bg-[#8A2BE2] shrink-0" aria-hidden="true" />
+              <span className="font-semibold">AI Price Forecast</span>
+            </label>
           </div>
 
           {/* Canvas Box */}
@@ -407,7 +441,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: hoveredCandle.color }}
                   />
-                  {hoveredCandle.is_forecast ? 'ML Forecast' : 'Actual Candle'}
+                  {hoveredCandle.is_forecast ? 'AI Forecast' : 'Actual Candle'}
                 </div>
                 <div>O: ₹{hoveredCandle.open} | H: ₹{hoveredCandle.high}</div>
                 <div>L: ₹{hoveredCandle.low} | C: ₹{hoveredCandle.close}</div>
@@ -423,13 +457,17 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
           <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-1">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-sm bg-[#00C805]" /> Bullish
+                <span className="w-2 h-2 rounded-sm bg-[#00C805]" aria-hidden="true" /> Bullish
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-sm bg-[#FF3B30]" /> Bearish
+                <span className="w-2 h-2 rounded-sm bg-[#FF3B30]" aria-hidden="true" /> Bearish
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-sm bg-[#8A2BE2]" /> ML Purple Forecast
+              <span
+                className={`flex items-center gap-1 transition-opacity ${
+                  timeline === '1D' && showForecast ? 'opacity-100' : 'opacity-35'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-sm bg-[#8A2BE2]" aria-hidden="true" /> AI Intraday Forecast
               </span>
             </div>
             <span>Replaced in real-time as actual ticks arrive</span>

@@ -182,28 +182,29 @@
     <!-- Center Column: Candlestick Chart (Timeline: 1D, 1W, 1M, 1Y, 5Y) -->
     <div class="col-span-12 lg:col-span-6 bg-gray-900/70 border border-gray-800 rounded-xl flex flex-col overflow-hidden">
       <!-- Chart Controls Header -->
-      <div class="p-3 border-b border-gray-800 bg-gray-900/90 flex flex-wrap items-center justify-between gap-2">
-        <div class="flex items-center space-x-3">
+      <div class="p-3 border-b border-gray-800 bg-gray-900/90 flex flex-col gap-2.5">
+        <div class="flex items-center flex-wrap gap-2.5">
           <span class="text-base font-bold text-white tracking-wide" id="selected-symbol-title">RELIANCE</span>
           <span class="text-xs text-gray-400" id="selected-company-title">Reliance Industries Ltd.</span>
           <span class="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700" id="selected-sector-title">Energy</span>
         </div>
 
-        <!-- Timeline: 1D, 1W, 1M, 1Y, 5Y -->
-        <div class="flex items-center space-x-3">
-          <div class="inline-flex rounded-md shadow-sm">
-            <button onclick="setTimeline('1D')" class="timeline-btn text-xs px-3 py-1 rounded-l border border-gray-700 bg-purple-900/60 text-purple-200 font-bold" data-timeline="1D">1D</button>
-            <button onclick="setTimeline('1W')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1W">1W</button>
-            <button onclick="setTimeline('1M')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1M">1M</button>
-            <button onclick="setTimeline('1Y')" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1Y">1Y</button>
-            <button onclick="setTimeline('5Y')" class="timeline-btn text-xs px-3 py-1 rounded-r border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="5Y">5Y</button>
+        <!-- Timeline (Fixed Position Left) & Forecast Toggle (Fixed Position Right) -->
+        <div class="flex items-center justify-between gap-3 min-h-[30px]">
+          <div class="inline-flex rounded-md shadow-sm" role="group" aria-label="Chart timeline">
+            <button type="button" onclick="setTimeline('1D')" aria-pressed="true" class="timeline-btn text-xs px-3 py-1 rounded-l border border-gray-700 bg-purple-900/60 text-purple-200 font-bold" data-timeline="1D">1D</button>
+            <button type="button" onclick="setTimeline('1W')" aria-pressed="false" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1W">1W</button>
+            <button type="button" onclick="setTimeline('1M')" aria-pressed="false" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1M">1M</button>
+            <button type="button" onclick="setTimeline('1Y')" aria-pressed="false" class="timeline-btn text-xs px-3 py-1 border-t border-b border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="1Y">1Y</button>
+            <button type="button" onclick="setTimeline('5Y')" aria-pressed="false" class="timeline-btn text-xs px-3 py-1 rounded-r border border-gray-700 bg-gray-800 text-gray-400 hover:text-white" data-timeline="5Y">5Y</button>
           </div>
 
-          <!-- Forecast Toggle (Only active on 1D) -->
-          <div id="forecast-toggle-container" class="flex items-center">
-            <label class="flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2.5 py-1 rounded border border-purple-800/40 hover:border-purple-600 transition">
-              <input type="checkbox" id="toggle-forecast" checked onchange="loadChartData()" class="rounded bg-gray-800 border-gray-700 text-purple-600 focus:ring-0">
-              <span class="font-semibold">Purple Forecast (#8A2BE2)</span>
+          <!-- Forecast Toggle (Always anchored in place; muted when outside 1D) -->
+          <div id="forecast-toggle-container" class="flex items-center shrink-0 transition-opacity duration-150">
+            <label id="forecast-toggle-label" title="Show or hide AI intraday closing predictions (1D view only)" class="flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2.5 py-1 rounded border border-purple-800/40 hover:border-purple-600 transition select-none">
+              <input type="checkbox" id="toggle-forecast" checked onchange="onForecastToggle()" class="rounded bg-gray-800 border-gray-700 text-purple-600 focus:ring-0">
+              <span class="w-2 h-2 rounded-full bg-[#8A2BE2] shrink-0" aria-hidden="true"></span>
+              <span class="font-semibold">AI Price Forecast</span>
             </label>
           </div>
         </div>
@@ -218,9 +219,9 @@
       <!-- Chart Legend & Status Bar -->
       <div class="p-3 border-t border-gray-800 bg-gray-900/80 flex items-center justify-between text-xs text-gray-400">
         <div class="flex items-center space-x-4">
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#00C805]"></span> Bullish Actual</span>
-          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#FF3B30]"></span> Bearish Actual</span>
-          <span id="forecast-legend-pill" class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#8A2BE2] shadow-[0_0_8px_#8A2BE2]"></span> ML Purple Forecast (Rest of Today • Glowing)</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#00C805]" aria-hidden="true"></span> Bullish Actual</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-[#FF3B30]" aria-hidden="true"></span> Bearish Actual</span>
+          <span id="forecast-legend-pill" class="flex items-center gap-1.5 transition-opacity duration-150"><span class="w-2.5 h-2.5 rounded-sm bg-[#8A2BE2] shadow-[0_0_8px_#8A2BE2]" aria-hidden="true"></span> AI Intraday Forecast (Rest of Session)</span>
         </div>
         <div id="chart-stats" class="font-mono text-gray-400">
           Actual: <span id="actual-count-stat" class="text-white">--</span> | Forecast: <span id="forecast-count-stat" class="text-purple-400">--</span>
@@ -458,44 +459,71 @@
       loadNews();
     }
 
-    // Timeline Selector (1d, 1w, 1m, 1y, 5y)
+    // Timeline Selector (1D, 1W, 1M, 1Y, 5Y)
     function setTimeline(tl) {
       currentTimeline = tl;
       document.querySelectorAll('.timeline-btn').forEach(b => {
-        if (b.dataset.timeline === tl) {
-          b.className = 'timeline-btn text-xs px-3 py-1 bg-purple-900/60 text-purple-200 font-bold border border-gray-700';
-        } else {
-          b.className = 'timeline-btn text-xs px-3 py-1 bg-gray-800 text-gray-400 hover:text-white border border-gray-700';
-        }
+        const isActive = b.dataset.timeline === tl;
+        b.setAttribute('aria-pressed', String(isActive));
+        const edgeClass =
+          b.dataset.timeline === '1D' ? 'rounded-l border' :
+          b.dataset.timeline === '5Y' ? 'rounded-r border' :
+          'border-t border-b';
+
+        b.className = isActive
+          ? `timeline-btn text-xs px-3 py-1 ${edgeClass} border-gray-700 bg-purple-900/60 text-purple-200 font-bold`
+          : `timeline-btn text-xs px-3 py-1 ${edgeClass} border-gray-700 bg-gray-800 text-gray-400 hover:text-white`;
       });
 
-      // Prediction toggle only enabled on 1D
-      const toggleContainer = document.getElementById('forecast-toggle-container');
-      const forecastLegend = document.getElementById('forecast-legend-pill');
-      if (tl === '1D') {
-        toggleContainer.style.display = 'flex';
-        forecastLegend.style.display = 'flex';
-      } else {
-        toggleContainer.style.display = 'none';
-        forecastLegend.style.display = 'none';
-      }
-
+      syncForecastControlState();
       loadChartData();
     }
 
-    // Fetch and Load Chart Data
+    function syncForecastControlState() {
+      const is1D = currentTimeline === '1D';
+      const checkbox = document.getElementById('toggle-forecast');
+      const toggleContainer = document.getElementById('forecast-toggle-container');
+      const toggleLabel = document.getElementById('forecast-toggle-label');
+      const forecastLegend = document.getElementById('forecast-legend-pill');
+
+      checkbox.disabled = !is1D;
+      toggleContainer.className = is1D
+        ? 'flex items-center shrink-0 transition-opacity duration-150 opacity-100'
+        : 'flex items-center shrink-0 transition-opacity duration-150 opacity-40 pointer-events-none';
+      toggleLabel.className = is1D
+        ? 'flex items-center text-xs text-purple-300 gap-1.5 cursor-pointer bg-purple-950/40 px-2.5 py-1 rounded border border-purple-800/40 hover:border-purple-600 transition select-none'
+        : 'flex items-center text-xs text-gray-400 gap-1.5 cursor-not-allowed bg-gray-800/40 px-2.5 py-1 rounded border border-gray-700/50 transition select-none';
+      forecastLegend.style.opacity = (is1D && checkbox.checked) ? '1' : '0.35';
+    }
+
+    function onForecastToggle() {
+      syncForecastControlState();
+      updateChartStats();
+      drawChart();
+    }
+
+    function updateChartStats() {
+      const actualCount = currentCandles.filter(c => !c.is_forecast).length;
+      const forecastCount = currentCandles.filter(c => c.is_forecast).length;
+      const showForecast = (currentTimeline === '1D') && document.getElementById('toggle-forecast').checked;
+
+      document.getElementById('actual-count-stat').textContent = actualCount;
+      document.getElementById('forecast-count-stat').textContent =
+        currentTimeline !== '1D' ? 'N/A' : (showForecast ? forecastCount : 'Hidden');
+    }
+
+    // Fetch and Load Chart Data (always keeps full 1D scale so forecast toggle never zooms chart)
     async function loadChartData() {
       const requestedSymbol = currentSymbol;
-      const incFc = (currentTimeline === '1D') && document.getElementById('toggle-forecast').checked;
+      const requestTimeline = currentTimeline;
+      const includeForecastParam = requestTimeline === '1D';
       try {
-        const res = await fetch(`/api/v1/market/charts/${requestedSymbol}?timeline=${currentTimeline}&include_forecast=${incFc}`);
+        const res = await fetch(`/api/v1/market/charts/${requestedSymbol}?timeline=${requestTimeline}&include_forecast=${includeForecastParam}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.symbol !== currentSymbol) return;
+        if (data.symbol !== currentSymbol || requestTimeline !== currentTimeline) return;
         currentCandles = data.candles;
-
-        document.getElementById('actual-count-stat').textContent = data.actual_candles_count;
-        document.getElementById('forecast-count-stat').textContent = data.forecast_candles_count;
+        updateChartStats();
       } catch (err) {
         console.error("Chart data error:", err);
       }
@@ -516,6 +544,7 @@
       const chartW = w - paddingLeft - paddingRight;
       const chartH = h - paddingTop - paddingBottom;
 
+      // Always compute Y and X bounds over full currentCandles so toggling AI Forecast never scales the graph
       let minPrice = Infinity;
       let maxPrice = -Infinity;
 
@@ -553,13 +582,20 @@
         ctx.fillText(`₹${pVal.toFixed(1)}`, w - paddingRight + 6, y + 3);
       }
 
-      // Pulsing Breathing Glow factor for Purple Candles
+      // Pulsing Breathing Glow factor for Forecast Candles
+      const showForecast = (currentTimeline === '1D') && document.getElementById('toggle-forecast').checked;
       const pulseBlur = 4 + 5 * Math.abs(Math.sin(animPhase));
       const candleCount = currentCandles.length;
       const candleW = Math.max(3, (chartW / candleCount) * 0.72);
       const stepX = chartW / candleCount;
 
       currentCandles.forEach((c, i) => {
+        if (c.is_forecast && !showForecast) {
+          c._screenX = null;
+          c._screenY = null;
+          return;
+        }
+
         const x = paddingLeft + (i * stepX) + (stepX / 2);
         const yOpen = priceToY(c.open);
         const yClose = priceToY(c.close);
@@ -624,7 +660,7 @@
         tooltip.innerHTML = `
           <div class="flex items-center gap-2 mb-1">
             <span class="w-2 h-2 rounded-full ${isFc ? 'bg-[#8A2BE2]' : (found.close >= found.open ? 'bg-[#00C805]' : 'bg-[#FF3B30]')}"></span>
-            <strong>${isFc ? 'PURPLE FORECAST CANDLE' : 'ACTUAL REAL CANDLE'}</strong>
+            <strong>${isFc ? 'AI FORECAST CANDLE' : 'ACTUAL REAL CANDLE'}</strong>
           </div>
           <div class="text-[10px] text-gray-400 mb-1">${new Date(found.timestamp * 1000).toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'})} IST</div>
           <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono">
@@ -791,6 +827,7 @@
     // Auto-Reload & Initialization
     window.addEventListener('load', async () => {
       resizeCanvas();
+      syncForecastControlState();
       await fetchHealth();
       await loadTickers();
       await loadChartData();
