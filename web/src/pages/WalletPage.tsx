@@ -288,8 +288,8 @@ export const WalletPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Two-Column Groww Layout: Equal Balance Card (Left) + Add Money / Withdraw (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+      {/* ── Two-Column Groww Layout: 70:30 Balance Card (Left) + Add Money / Withdraw (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(290px,3fr)] gap-6 items-stretch">
         {/* ━━ LEFT: Balance Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <Card3D
           data-testid="wallet-balance-card"
@@ -440,13 +440,13 @@ export const WalletPage: React.FC = () => {
                 </div>
 
                 {/* Quick Chips */}
-                <div className="flex items-center justify-center gap-2 flex-wrap">
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
                   {DEPOSIT_PRESETS.map((delta) => (
                     <button
                       key={delta}
                       type="button"
                       onClick={() => handleDepositPreset(delta)}
-                      className="min-h-[36px] px-3 py-1 rounded-full text-xs font-bold bg-surface-inset text-text-primary border border-surface-border hover:border-brand-up/50 transition-colors cursor-pointer"
+                      className="min-h-[34px] px-2.5 py-1 rounded-full text-xs font-bold bg-surface-inset text-text-primary border border-surface-border hover:border-brand-up/50 transition-colors cursor-pointer"
                     >
                       +₹{delta.toLocaleString('en-IN')}
                     </button>
