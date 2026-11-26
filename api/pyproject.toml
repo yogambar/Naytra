@@ -1,7 +1,7 @@
 [project]
 name = "naytra-api"
 version = "0.1.0"
-description = "Naytra – educational paper-trading backend"
+description = "Naytra – BSE Sensex 30 trading backend"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.115",

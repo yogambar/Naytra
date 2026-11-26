@@ -77,7 +77,7 @@ describe('AppShell & Navigation', () => {
     );
 
     expect(await screen.findByRole('heading', { name: /Market Dashboard/i })).toBeInTheDocument();
-    expect(await screen.findByText(/Total Virtual Portfolio/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Total Portfolio/i)).toBeInTheDocument();
   });
 
   it('navigates to Holdings page when Holdings tab is clicked', async () => {
@@ -92,6 +92,10 @@ describe('AppShell & Navigation', () => {
     fireEvent.click(holdingsLinks[0]);
 
     expect(await screen.findByRole('heading', { name: /Holdings & Sensex 30/i })).toBeInTheDocument();
+    const mainEl = document.querySelector('main');
+    expect(mainEl).toHaveClass('overflow-x-clip');
+    expect(mainEl).not.toHaveClass('overflow-x-hidden');
+    expect(screen.getByTestId('holdings-sticky-panel')).toHaveClass('lg:sticky');
   });
 
   it('navigates to Learn page when Learn tab is clicked', async () => {
@@ -115,8 +119,8 @@ describe('AppShell & Navigation', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByRole('heading', { name: /Virtual Wallet & Ledger/i })).toBeInTheDocument();
-    expect(await screen.findByText(/10,00,000 paise/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Wallet & Ledger/i })).toBeInTheDocument();
+    expect(await screen.findByText(/[1-9][0-9,]* paise/i)).toBeInTheDocument();
     expect(await screen.findByText(/Double-entry ledger in integer paise/i)).toBeInTheDocument();
   });
 

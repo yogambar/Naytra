@@ -65,7 +65,7 @@ const CoinMesh: React.FC = () => {
         </mesh>
       </group>
 
-      {/* Back Face "VIRTUAL" Emboss */}
+      {/* Back Face "NAYTRA" Emboss */}
       <group position={[0, 0, -0.12]} rotation={[0, Math.PI, 0]} scale={0.6}>
         <mesh position={[0, 0, 0]}>
           <boxGeometry args={[1.2, 0.35, 0.04]} />
@@ -79,7 +79,7 @@ const CoinMesh: React.FC = () => {
 export const CoinVirtual3D: React.FC<{ size?: number; className?: string }> = ({ size = 200, className = '' }) => {
   return (
     <SceneShell
-      accessibleLabel="Virtual Naytra Coin in 3D"
+      accessibleLabel="Naytra Bonus Coin in 3D"
       fallback={<CoinVirtualFallback size={size} />}
       width={size}
       height={size}

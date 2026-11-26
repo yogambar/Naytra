@@ -1,7 +1,15 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { WalletPage } from '../pages/WalletPage';
+import { DashboardPage } from '../pages/DashboardPage';
+import { WalletProvider } from '../context/WalletContext';
+import {
+  executeTradeInFirestore,
+  executeWalletDepositInFirestore,
+  getCachedWalletSnapshot,
+} from '../services/firestoreService';
 
 // Mock Capacitor plugins
 vi.mock('@capacitor/haptics', () => ({
@@ -24,65 +32,164 @@ vi.mock('../context/AuthContext', () => ({
 }));
 
 describe('WalletPage Component', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
 
-  it('renders header, paper funds badge, and integer paise subtitle', async () => {
+  it('renders Groww-style header, balance card, and random ₹1–₹100 signup bonus in integer paise', () => {
     render(
       <MemoryRouter>
         <WalletPage />
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('heading', { name: /Virtual Wallet & Ledger/i })).toBeInTheDocument();
-    expect(screen.getByText(/Paper Funds Only/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Wallet & Ledger/i })).toBeInTheDocument();
     expect(screen.getByText(/Double-entry ledger in integer paise/i)).toBeInTheDocument();
+    expect(screen.getByText(/Available Balance/i)).toBeInTheDocument();
+
+    const seededWallet = getCachedWalletSnapshot('wallet_test_uid');
+    expect(seededWallet.is_virtual).toBe(false);
+    expect(seededWallet.balance_paise).toBeGreaterThanOrEqual(100);
+    expect(seededWallet.balance_paise).toBeLessThanOrEqual(10_000);
+    expect(seededWallet.balance_paise % 100).toBe(0);
+
+    expect(
+      screen.getByText(new RegExp(`${seededWallet.balance_paise.toLocaleString('en-IN')} paise`, 'i'))
+    ).toBeInTheDocument();
   });
 
-  it('renders available virtual cash in integer paise and ₹ currency', async () => {
+  it('renders signup bonus badge and ledger breakdown without paper/virtual labels', () => {
     render(
       <MemoryRouter>
         <WalletPage />
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/Available Virtual Cash/i)).toBeInTheDocument();
-    expect(screen.getByText(/10,00,000 paise/i)).toBeInTheDocument();
-  });
-
-  it('renders virtual signup bonus disclosure card', async () => {
-    render(
-      <MemoryRouter>
-        <WalletPage />
-      </MemoryRouter>
-    );
-
-    const bonusBadges = screen.getAllByText(/Virtual Signup Bonus/i);
-    expect(bonusBadges.length).toBeGreaterThan(0);
-    expect(screen.getByText(/Credited:.*once per account/i)).toBeInTheDocument();
-  });
-
-  it('renders breakdown columns including initial grant and locked funds', async () => {
-    render(
-      <MemoryRouter>
-        <WalletPage />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText(/Initial Grant/i)).toBeInTheDocument();
-    expect(screen.getByText(/Locked in Orders/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Signup Bonus/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Initial Bonus/i)).toBeInTheDocument();
+    expect(screen.getByText(/Locked/i)).toBeInTheDocument();
     expect(screen.getByText(/Realized Gains/i)).toBeInTheDocument();
     expect(screen.getByText(/Total Net Worth/i)).toBeInTheDocument();
+
+    expect(screen.getByRole('heading', { name: /All Transactions/i })).toBeInTheDocument();
+    expect(screen.getByText(/Welcome Signup Bonus/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIGNUP_BONUS/i)).toBeInTheDocument();
+    expect(screen.queryByText(/paper trading/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/virtual/i)).not.toBeInTheDocument();
   });
 
-  it('renders disclaimer and double-entry ledger transactions table', async () => {
+  it('adds real INR funds 1:1 using minimal BUY button and records transaction', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <WalletPage />
+        <WalletProvider>
+          <WalletPage />
+        </WalletProvider>
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/Virtual Funds Disclaimer:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Double-Entry Ledger Transactions/i)).toBeInTheDocument();
-    expect(screen.getByText(/Initial Virtual Signup Bonus/i)).toBeInTheDocument();
-    expect(screen.getByText(/SIGNUP_BONUS/i)).toBeInTheDocument();
+    const initialPaise = getCachedWalletSnapshot('wallet_test_uid').balance_paise;
+    const amountInput = screen.getByLabelText(/^Amount$/i) as HTMLInputElement;
+    await user.clear(amountInput);
+    await user.type(amountInput, '500');
+
+    const buyBtn = screen.getByRole('button', { name: /^BUY$/i });
+    await user.click(buyBtn);
+
+    const expectedPaise = initialPaise + 50_000;
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`${expectedPaise.toLocaleString('en-IN')} paise`, 'i'))
+      ).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Deposited ₹500\.00/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('DEPOSIT')).toBeInTheDocument();
+  });
+
+  it('withdraws INR 1:1 with Withdraw button and enforces available balance', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <WalletProvider>
+          <WalletPage />
+        </WalletProvider>
+      </MemoryRouter>
+    );
+
+    // Seed an extra ₹1,000 so withdrawal of ₹400 has plenty of balance
+    await executeWalletDepositInFirestore('wallet_test_uid', 1000);
+    const fundedPaise = getCachedWalletSnapshot('wallet_test_uid').balance_paise;
+
+    // Switch to Withdraw tab
+    await user.click(screen.getByRole('tab', { name: /^Withdraw$/i }));
+
+    // Try over-withdrawing
+    const withdrawInput = screen.getByLabelText(/^Amount$/i) as HTMLInputElement;
+    await user.clear(withdrawInput);
+    await user.type(withdrawInput, '25000');
+    await user.click(screen.getByRole('button', { name: /^Withdraw$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Insufficient balance/i);
+
+    // Valid withdrawal of ₹400
+    await user.clear(withdrawInput);
+    await user.type(withdrawInput, '400');
+    await user.click(screen.getByRole('button', { name: /^Withdraw$/i }));
+
+    const remainingPaise = fundedPaise - 40_000;
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`${remainingPaise.toLocaleString('en-IN')} paise`, 'i'))
+      ).toBeInTheDocument();
+    });
+    expect(screen.getAllByText(/Withdrew ₹400\.00/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('WITHDRAWAL')).toBeInTheDocument();
+  });
+
+  it('enforces real-money balance on trades and syncs WalletPage with DashboardPage', async () => {
+    render(
+      <MemoryRouter>
+        <WalletProvider>
+          <DashboardPage />
+          <WalletPage />
+        </WalletProvider>
+      </MemoryRouter>
+    );
+
+    const initialPaise = getCachedWalletSnapshot('wallet_test_uid').balance_paise;
+
+    // Buying ₹3,000 with only ₹1–₹100 bonus should reject for insufficient balance
+    await expect(
+      executeTradeInFirestore('wallet_test_uid', {
+        symbol: 'RELIANCE',
+        name: 'Reliance Industries Ltd.',
+        side: 'BUY',
+        orderMode: 'Delivery',
+        priceType: 'Market',
+        quantity: 2,
+        executionPriceInr: 1500,
+      })
+    ).rejects.toThrow(/Insufficient balance/i);
+
+    // Deposit ₹5,000 and execute the ₹3,000 RELIANCE order
+    await executeWalletDepositInFirestore('wallet_test_uid', 5000);
+    await executeTradeInFirestore('wallet_test_uid', {
+      symbol: 'RELIANCE',
+      name: 'Reliance Industries Ltd.',
+      side: 'BUY',
+      orderMode: 'Delivery',
+      priceType: 'Market',
+      quantity: 2,
+      executionPriceInr: 1500,
+    });
+
+    const expectedPaise = initialPaise + 500_000 - 300_000;
+    await waitFor(() => {
+      expect(
+        screen.getByText(new RegExp(`${expectedPaise.toLocaleString('en-IN')} paise`, 'i'))
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText(/BUY \(Delivery\) 2 RELIANCE/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 Open/i)).toBeInTheDocument();
   });
 });

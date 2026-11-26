@@ -64,6 +64,7 @@ async def get_current_user(
             profile_complete=True,
             email_verified=email_verified,
             terms_accepted=True,
+            bonus_claimed=False,
         )
 
     # Lookup user in DB
@@ -115,8 +116,8 @@ def user_to_profile_data(user: AppUser) -> UserProfileData:
         city=user.city,
         profile_complete=user.profile_complete,
         email_verified=user.email_verified,
-        terms_accepted=user.terms_accepted,
-        bonus_claimed=getattr(user, "bonus_claimed", False),
+        terms_accepted=bool(user.terms_accepted),
+        bonus_claimed=bool(getattr(user, "bonus_claimed", False)),
         created_at=user.created_at.isoformat() if user.created_at else None,
     )
 
@@ -130,12 +131,13 @@ async def get_me(user: Annotated[AppUser, Depends(get_current_user)]) -> Success
 @router.post("/claim-bonus", response_model=SuccessResponse)
 async def claim_bonus(
     user: Annotated[AppUser, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession | None, Depends(get_db)],
 ) -> SuccessResponse:
     """Mark signup bonus as claimed so the new-user starting page is dismissed."""
     user.bonus_claimed = True
-    await db.commit()
-    await db.refresh(user)
+    if db is not None:
+        await db.commit()
+        await db.refresh(user)
     logger.info("Marked signup bonus as claimed for user %s", user.id)
     return SuccessResponse(data=user_to_profile_data(user))
 
@@ -150,7 +152,7 @@ async def complete_profile(
     if not payload.terms_accepted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You must accept the terms and acknowledge the paper-trading disclaimer.",
+            detail="You must accept the Terms & Conditions to continue.",
         )
 
     name = payload.name.strip()

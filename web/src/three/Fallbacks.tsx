@@ -37,7 +37,7 @@ export const CoinVirtualFallback: React.FC<{ size?: number; className?: string }
       style={{ boxShadow: '0 8px 24px rgba(242, 169, 59, 0.35)' }}
     >
       <span className="font-extrabold text-brand-ink text-3xl font-mono">N</span>
-      <span className="text-[9px] font-bold tracking-widest text-brand-ink uppercase -mt-0.5">VIRTUAL</span>
+      <span className="text-[9px] font-bold tracking-widest text-brand-ink uppercase -mt-0.5">INR</span>
     </div>
   </div>
 );

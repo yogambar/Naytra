@@ -11,7 +11,7 @@ describe('StatusPage Component', () => {
       </BrowserRouter>
     );
     expect(screen.getByText('Naytra is running')).toBeInTheDocument();
-    expect(screen.getByText('BSE Sensex 30 Paper Trading')).toBeInTheDocument();
+    expect(screen.getByText('BSE Sensex 30 Trading')).toBeInTheDocument();
   });
 
   it('renders system status cards', () => {

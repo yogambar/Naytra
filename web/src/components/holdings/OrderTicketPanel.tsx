@@ -101,7 +101,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
           <div className="space-y-1">
             <h2 className="text-sm font-bold text-text-primary">Select a stock to get started</h2>
             <p className="text-xs text-text-tertiary max-w-[220px]">
-              Choose any holding or Sensex 30 stock from the table to buy or sell virtually.
+              Choose any holding or Sensex 30 stock from the table to buy or sell.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
       return 'Enter a valid limit price above ₹0.';
     }
     if (side === 'BUY' && estimatedTotalPaise > availableCashPaise) {
-      return `Insufficient virtual balance. Needed ${formatINR(estimatedTotalInr)}.`;
+      return `Insufficient balance. Needed ${formatINR(estimatedTotalInr)}.`;
     }
     if (side === 'SELL' && parsedQty > availableShares) {
       return `You only hold ${availableShares} ${orderMode.toLowerCase()} shares of ${selectedTicker.symbol}.`;
@@ -186,11 +186,11 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
         executionPriceInr: effectivePriceInr,
       });
       setStatusMsg(
-        `Executed virtual ${side} ${parsedQty} ${selectedTicker.symbol} @ ${formatINR(effectivePriceInr)}`
+        `Executed ${side} ${parsedQty} ${selectedTicker.symbol} @ ${formatINR(effectivePriceInr)}`
       );
       setQtyText('1');
     } catch (submitErr: any) {
-      setFormError(submitErr?.message || 'Unable to execute virtual order.');
+      setFormError(submitErr?.message || 'Unable to execute order.');
     } finally {
       setSubmitting(false);
     }
@@ -437,7 +437,7 @@ export const OrderTicketPanel: React.FC<OrderTicketPanelProps> = ({
         {/* Notice Banner */}
         <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-2 text-[11px] text-amber-200">
           <span className="text-text-secondary">
-            Virtual {priceType.toLowerCase()} order reflects simulated BSE price marks.
+            {priceType} order executes against live BSE price marks.
           </span>
           <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
         </div>

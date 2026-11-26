@@ -79,7 +79,7 @@ class CheckPasswordData(BaseModel):
     message: str
 
 
-# ── Virtual Wallet & Double-Entry Ledger Schemas ────────────────────────────
+# ── Wallet & Double-Entry Ledger Schemas ────────────────────────────────────
 
 class WalletData(BaseModel):
     user_id: str
@@ -92,7 +92,7 @@ class WalletData(BaseModel):
     initial_grant_paise: int
     initial_grant_inr: float
     currency: str = "INR"
-    is_virtual: bool = True
+    is_virtual: bool = False
 
 
 class LedgerItemData(BaseModel):

@@ -148,10 +148,10 @@ export const DesignSystem: React.FC = () => {
 
             <Card3D elevation="e2" className="p-5 flex flex-col justify-between">
               <div>
-                <span className="text-xs font-bold text-text-tertiary">VIRTUAL WALLET</span>
-                <p className="text-base font-bold font-mono mt-1 text-brand-marigold-text">₹10,000.00</p>
+                <span className="text-xs font-bold text-text-tertiary">INR WALLET</span>
+                <p className="text-base font-bold font-mono mt-1 text-brand-marigold-text">₹100.00</p>
               </div>
-              <p className="text-[11px] text-text-tertiary mt-4">Paper trading virtual balance</p>
+              <p className="text-[11px] text-text-tertiary mt-4">Double-entry INR balance</p>
             </Card3D>
           </div>
         </section>
@@ -186,7 +186,7 @@ export const DesignSystem: React.FC = () => {
               <Input
                 label="Error State"
                 defaultValue="invalid"
-                error="Insufficient virtual funds"
+                error="Insufficient balance"
               />
             </div>
 
@@ -255,11 +255,11 @@ export const DesignSystem: React.FC = () => {
           <Dialog
             open={dialogOpen}
             onOpenChange={setDialogOpen}
-            title="Educational Paper Trading Notice"
-            description="Virtual market environment with simulated execution."
+            title="BSE Sensex 30 Trading Notice"
+            description="Order execution environment with double-entry ledger."
           >
             <p className="text-sm text-text-secondary">
-              Naytra simulates order matching against historical replay data. No real broker, banking or payment integrations exist. All virtual profits and losses are strictly for learning.
+              Naytra tracks every order, deposit, withdrawal, and holding using integer-paise double-entry ledger entries.
             </p>
             <div className="mt-6 flex justify-end">
               <Button variant="primary" onClick={() => setDialogOpen(false)}>I Understand</Button>
@@ -282,7 +282,7 @@ export const DesignSystem: React.FC = () => {
                 <span className="font-mono">₹1,405.00 – ₹1,432.00</span>
               </div>
               <div className="flex justify-between text-xs py-1">
-                <span className="text-text-secondary">Simulated Slippage</span>
+                <span className="text-text-secondary">Estimated Slippage</span>
                 <span className="font-mono">5 bps (0.05%)</span>
               </div>
             </div>
@@ -374,9 +374,9 @@ export const DesignSystem: React.FC = () => {
               <p className="text-xs text-text-secondary mt-3">Two candlesticks + Marigold diagonal</p>
             </Card3D>
 
-            {/* Virtual Coin 3D */}
+            {/* Bonus Coin 3D */}
             <Card3D elevation="e2" className="p-6 flex flex-col items-center text-center">
-              <span className="text-xs font-bold text-text-tertiary mb-3">VIRTUAL COIN 3D</span>
+              <span className="text-xs font-bold text-text-tertiary mb-3">BONUS COIN 3D</span>
               {forceFallback ? <CoinVirtualFallback size={180} /> : <CoinVirtual3D size={180} />}
               <p className="text-xs text-text-secondary mt-3">Gold metallic rotating coin for bonus reveal</p>
             </Card3D>

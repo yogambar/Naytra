@@ -12,7 +12,7 @@ describe('App Router', () => {
     );
     expect(
       await screen.findByRole('heading', {
-        name: /Get up to ₹10,000 signup bonus for paper trading!/i,
+        name: /Get up to ₹100 signup bonus when you join!/i,
       })
     ).toBeInTheDocument();
   });

@@ -124,7 +124,7 @@ export const SignUpPage: React.FC = () => {
     }
 
     if (!termsAccepted) {
-      setFormError('You must accept the terms and paper-trading disclaimer.');
+      setFormError('You must accept the Terms & Conditions to continue.');
       hapticError();
       return;
     }
@@ -171,7 +171,7 @@ export const SignUpPage: React.FC = () => {
           </Link>
           <h2 className="text-2xl font-bold font-heading text-text-primary">Create your account</h2>
           <p className="text-sm text-text-secondary mt-1">
-            Join the BSE Sensex 30 paper-trading simulator
+            Trade BSE Sensex 30 stocks with your INR wallet
           </p>
         </div>
 
@@ -347,7 +347,7 @@ export const SignUpPage: React.FC = () => {
               )}
             </div>
 
-            {/* Terms & Paper Trading Disclaimer */}
+            {/* Terms & Conditions */}
             <div className="pt-2">
               <label className="flex items-start gap-2.5 text-xs text-text-secondary cursor-pointer select-none">
                 <input
@@ -358,7 +358,7 @@ export const SignUpPage: React.FC = () => {
                   className="mt-0.5 rounded text-brand-marigold focus:ring-brand-marigold/30"
                 />
                 <span>
-                  I accept the Terms & Conditions and understand Naytra is an educational paper-trading simulator with virtual funds. No real money or stock exchange orders are executed.
+                  I accept the Terms & Conditions and acknowledge the market risk disclosure for trading on Naytra.
                 </span>
               </label>
             </div>

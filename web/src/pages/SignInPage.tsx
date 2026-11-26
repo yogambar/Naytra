@@ -77,7 +77,7 @@ export const SignInPage: React.FC = () => {
           </Link>
           <h2 className="text-2xl font-bold font-heading text-text-primary">Welcome back</h2>
           <p className="text-sm text-text-secondary mt-1">
-            Sign in to continue your paper-trading session
+            Sign in to continue your trading session
           </p>
         </div>
 

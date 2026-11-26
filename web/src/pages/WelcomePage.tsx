@@ -64,7 +64,7 @@ export const WelcomePage: React.FC = () => {
           className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-marigold-bg border border-brand-marigold/30 text-brand-marigold-text text-xs font-bold tracking-wide uppercase mb-4"
         >
           <Sparkles className="w-3.5 h-3.5 text-brand-marigold-text" />
-          <span>Educational Paper Trading</span>
+          <span>BSE Sensex 30 Trading</span>
         </motion.div>
 
         {/* Headlines */}
@@ -74,7 +74,7 @@ export const WelcomePage: React.FC = () => {
           transition={{ delay: 0.25, duration: 0.4 }}
           className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-heading leading-tight"
         >
-          Get up to <span className="text-brand-marigold-text">₹10,000</span> signup bonus for paper trading!
+          Get up to <span className="text-brand-marigold-text">₹100</span> signup bonus when you join!
         </motion.h1>
 
         <motion.p
@@ -83,10 +83,10 @@ export const WelcomePage: React.FC = () => {
           transition={{ delay: 0.35, duration: 0.4 }}
           className="mt-4 text-base sm:text-lg text-text-secondary max-w-lg leading-relaxed"
         >
-          Create your free account and receive virtual trading cash to start your paper-trading journey. No real money involved.
+          Create your free account and receive a random ₹1–₹100 welcome bonus directly in your INR wallet to start trading BSE Sensex 30 stocks.
         </motion.p>
 
-        {/* Virtual funds disclosure */}
+        {/* Wallet disclosure */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -94,7 +94,7 @@ export const WelcomePage: React.FC = () => {
           className="mt-2 text-xs font-semibold text-text-tertiary flex items-center justify-center gap-1.5"
         >
           <ShieldCheck className="w-3.5 h-3.5 text-brand-up" />
-          <span>Virtual, non-withdrawable funds for BSE Sensex 30 practice.</span>
+          <span>100% real INR wallet for BSE Sensex 30 trading.</span>
         </motion.div>
 
         {/* Error message if any */}
@@ -174,7 +174,7 @@ export const WelcomePage: React.FC = () => {
 
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-text-tertiary border-t border-surface-border">
-        <span>© 2026 Naytra. Educational BSE Sensex 30 Paper Trading Simulator.</span>
+        <span>© 2026 Naytra. BSE Sensex 30 Trading Platform.</span>
       </footer>
     </div>
   );

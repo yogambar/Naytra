@@ -129,7 +129,7 @@ export const VerifyEmailPage: React.FC = () => {
 
           <h2 className="text-2xl font-bold font-heading text-text-primary">Verify your email</h2>
           <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-            We sent a verification link to <strong className="text-text-primary">{displayEmail}</strong>. Please check your inbox and verify your email to unlock your virtual trading wallet.
+            We sent a verification link to <strong className="text-text-primary">{displayEmail}</strong>. Please check your inbox and verify your email to unlock your trading wallet.
           </p>
 
           {/* Auto-reloading status badge */}

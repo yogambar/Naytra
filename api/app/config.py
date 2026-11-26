@@ -29,9 +29,9 @@ class Settings(BaseSettings):
         description="REPLAY for historical data playback, LIVE for real-time",
     )
 
-    # Signup bonus
-    SIGNUP_BONUS_MIN_INR: int = Field(default=1000, ge=0)
-    SIGNUP_BONUS_MAX_INR: int = Field(default=10000, ge=0)
+    # Signup bonus (random INR from ₹1 to ₹100 per new user)
+    SIGNUP_BONUS_MIN_INR: int = Field(default=1, ge=0)
+    SIGNUP_BONUS_MAX_INR: int = Field(default=100, ge=0)
     SIGNUP_BONUS_ENABLED: bool = Field(default=True)
 
     # Firebase Auth configuration

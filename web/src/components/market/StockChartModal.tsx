@@ -20,7 +20,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getFirestoreWallet, executePaperTradeInFirestore } from '../../services/firestoreService';
+import { useSyncedWallet } from '../../context/WalletContext';
 
 function getSafeExternalUrl(rawUrl?: string): string | null {
   if (!rawUrl) return null;
@@ -67,7 +67,9 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   onClose,
   onTradeSuccess,
 }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const uid = user?.uid || profile?.id;
+  const { wallet, portfolio, executeTrade } = useSyncedWallet();
   const [timeline, setTimeline] = useState<'1D' | '1W' | '1M' | '1Y' | '5Y'>('1D');
   const [chartData, setChartData] = useState<ChartResponse | null>(null);
   const [insight, setInsight] = useState<MarketInsight | null>(null);
@@ -82,7 +84,13 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   const [quantity, setQuantity] = useState<number>(1);
   const [orderSubmitting, setOrderSubmitting] = useState<boolean>(false);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState<string | null>(null);
-  const [walletBalancePaise, setWalletBalancePaise] = useState<number>(1000000); // Default ₹10,000
+  const [orderErrorMsg, setOrderErrorMsg] = useState<string | null>(null);
+
+  const walletBalancePaise = wallet.balance_paise;
+  const heldDeliveryShares =
+    portfolio.holdings.find(
+      (h) => h.symbol.toUpperCase() === symbol.toUpperCase() && (h.order_mode || 'Delivery') === 'Delivery'
+    )?.quantity ?? 0;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null);
@@ -94,12 +102,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
     setNewsLoading(true);
     setSelectedArticle(null);
     setOrderSuccessMsg(null);
-
-    if (user?.uid) {
-      getFirestoreWallet(user.uid).then((w) => {
-        if (!cancelled && w) setWalletBalancePaise(w.total_cash_paise);
-      });
-    }
+    setOrderErrorMsg(null);
 
     Promise.all([fetchStockInsight(symbol), fetchStockNews(symbol)]).then(
       ([ins, stockNews]) => {
@@ -113,7 +116,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, symbol, user?.uid]);
+  }, [isOpen, symbol]);
 
   // Fetch chart series per timeline (always request 1D forecasts so toggling visibility never scales the graph)
   useEffect(() => {
@@ -278,21 +281,28 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
     setHoveredCandle(found);
   };
 
-  // Place paper order
+  // Place order
   const handleExecuteTrade = async () => {
-    if (!user?.uid || !chartData) return;
+    if (!uid || !chartData) return;
     const actualCandles = chartData.candles.filter((c) => !c.is_forecast);
     const latestPrice = actualCandles[actualCandles.length - 1]?.close || 1500;
     const totalCostPaise = Math.round(latestPrice * quantity * 100);
 
+    setOrderErrorMsg(null);
+    setOrderSuccessMsg(null);
+
     if (orderSide === 'BUY' && totalCostPaise > walletBalancePaise) {
-      alert('Insufficient virtual balance to execute this trade.');
+      setOrderErrorMsg('Insufficient balance to execute this buy order.');
+      return;
+    }
+    if (orderSide === 'SELL' && quantity > heldDeliveryShares) {
+      setOrderErrorMsg(`Only ${heldDeliveryShares} delivery shares of ${symbol} available to sell.`);
       return;
     }
 
     setOrderSubmitting(true);
     try {
-      const result = await executePaperTradeInFirestore(user.uid, {
+      await executeTrade({
         symbol,
         name: insight?.company_name || symbol,
         side: orderSide,
@@ -302,14 +312,13 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
         executionPriceInr: latestPrice,
       });
 
-      setWalletBalancePaise(result.wallet.total_cash_paise);
       setOrderSuccessMsg(
-        `Successfully executed virtual ${orderSide} of ${quantity} shares of ${symbol}!`
+        `Successfully executed ${orderSide} of ${quantity} shares of ${symbol}!`
       );
       if (onTradeSuccess) onTradeSuccess();
     } catch (err: any) {
       console.error('Trade error:', err);
-      alert(err?.message || 'Failed to record virtual trade.');
+      setOrderErrorMsg(err?.message || 'Failed to record trade.');
     } finally {
       setOrderSubmitting(false);
     }
@@ -608,19 +617,40 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
           )}
         </section>
 
-        {/* Paper Trade Execution Ticket */}
+        {/* Order Execution Ticket */}
         <div className="bg-surface-inset p-4 rounded-xl border border-surface-border space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-text-tertiary">
-              Simulated Paper Order Ticket
+              Order Ticket
             </span>
-            <span className="text-xs text-text-secondary">
-              Virtual Cash: <strong className="font-mono text-text-primary">₹{(walletBalancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-            </span>
+            <div className="flex items-center gap-3 text-xs text-text-secondary">
+              <span>
+                Held: <strong className="font-mono text-text-primary">{heldDeliveryShares}</strong>
+              </span>
+              <span>
+                Balance:{' '}
+                <strong className="font-mono text-text-primary">
+                  ₹{(walletBalancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </strong>
+              </span>
+            </div>
           </div>
 
+          {orderErrorMsg && (
+            <div
+              role="alert"
+              className="p-2.5 rounded-lg bg-brand-down-bg border border-brand-down/30 text-xs text-brand-down flex items-center gap-2"
+            >
+              <span>{orderErrorMsg}</span>
+            </div>
+          )}
+
           {orderSuccessMsg && (
-            <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-xs text-emerald-400 flex items-center gap-2">
+            <div
+              role="status"
+              aria-live="polite"
+              className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-xs text-emerald-400 flex items-center gap-2"
+            >
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>{orderSuccessMsg}</span>
             </div>
@@ -676,7 +706,7 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
               onClick={handleExecuteTrade}
               className="w-full sm:w-auto"
             >
-              Execute Paper {orderSide}
+              {orderSide}
             </Button>
           </div>
         </div>

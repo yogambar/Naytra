@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { WalletProvider } from './context/WalletContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppShell } from './components/layout/AppShell';
 import { Skeleton } from './design/Skeleton';
@@ -66,7 +67,8 @@ const PageFallback: React.FC = () => (
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Suspense
+      <WalletProvider>
+        <Suspense
         fallback={
           <div className="min-h-screen bg-surface-base p-8 flex items-center justify-center">
             <Skeleton variant="rectangular" width={300} height={200} />
@@ -209,6 +211,7 @@ export const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </WalletProvider>
     </AuthProvider>
   );
 };

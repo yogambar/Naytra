@@ -126,7 +126,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         <table className="w-full min-w-[640px] border-collapse text-left">
           <caption id={captionId} className="sr-only">
             {mode === 'holdings'
-              ? 'Your current virtual BSE equity holdings'
+              ? 'Your current BSE equity holdings'
               : 'BSE Sensex 30 constituent stocks'}
           </caption>
 

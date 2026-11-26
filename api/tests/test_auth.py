@@ -98,7 +98,7 @@ async def test_complete_profile_rejects_under_18(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_complete_profile_rejects_terms_not_accepted(client: AsyncClient):
-    """Must accept terms and paper trading disclaimer."""
+    """Must accept terms and conditions disclaimer."""
     token = "mock-token:uid_no_terms:noterms@example.com:true"
     payload = {
         "name": "No Terms",

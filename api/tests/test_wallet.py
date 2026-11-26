@@ -1,4 +1,4 @@
-"""Tests for Virtual Wallet & Double-Entry Ledger."""
+"""Tests for Wallet & Double-Entry Ledger."""
 from __future__ import annotations
 
 import pytest
@@ -24,14 +24,15 @@ async def test_wallet_get_creates_with_signup_bonus(client):
     assert json_data["ok"] is True
     data = json_data["data"]
 
-    # Verify integer paise values
+    # Verify integer paise values (random signup bonus between ₹1 and ₹100)
     assert data["user_id"] == "user_wallet_1"
-    assert data["balance_paise"] == 1_000_000  # ₹10,000
-    assert data["balance_inr"] == 10_000.0
+    assert 100 <= data["balance_paise"] <= 10_000
+    assert data["balance_paise"] % 100 == 0
+    assert data["balance_inr"] == data["balance_paise"] / 100.0
     assert data["locked_paise"] == 0
-    assert data["total_cash_paise"] == 1_000_000
+    assert data["total_cash_paise"] == data["balance_paise"]
     assert data["currency"] == "INR"
-    assert data["is_virtual"] is True
+    assert data["is_virtual"] is False
 
 
 @pytest.mark.asyncio
@@ -41,11 +42,12 @@ async def test_wallet_idempotent_no_duplicate_bonus(client):
     resp1 = await client.get("/api/v1/wallet", headers=headers)
     assert resp1.status_code == 200
     bal1 = resp1.json()["data"]["balance_paise"]
+    assert 100 <= bal1 <= 10_000
 
     resp2 = await client.get("/api/v1/wallet", headers=headers)
     assert resp2.status_code == 200
     bal2 = resp2.json()["data"]["balance_paise"]
-    assert bal1 == bal2 == 1_000_000
+    assert bal1 == bal2
 
 
 @pytest.mark.asyncio
@@ -53,7 +55,8 @@ async def test_wallet_ledger_history(client):
     """GET /api/v1/wallet/ledger should list user transactions with double-entry details."""
     headers = {"Authorization": "Bearer mock-token:user_wallet_3:wallet3@example.com:true"}
     # Call wallet first to trigger bonus
-    await client.get("/api/v1/wallet", headers=headers)
+    wallet_resp = await client.get("/api/v1/wallet", headers=headers)
+    expected_paise = wallet_resp.json()["data"]["balance_paise"]
 
     resp = await client.get("/api/v1/wallet/ledger", headers=headers)
     assert resp.status_code == 200
@@ -65,10 +68,10 @@ async def test_wallet_ledger_history(client):
     assert len(data["items"]) >= 1
     item = data["items"][0]
     assert item["type"] == "SIGNUP_BONUS"
-    assert item["amount_paise"] == 1_000_000
-    assert item["amount_inr"] == 10_000.0
+    assert item["amount_paise"] == expected_paise
+    assert item["amount_inr"] == expected_paise / 100.0
     assert item["is_credit"] is True
-    assert item["balance_after_paise"] == 1_000_000
+    assert item["balance_after_paise"] == expected_paise
     assert "Signup Bonus" in item["description"]
 
 

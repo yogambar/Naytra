@@ -18,7 +18,7 @@ export const StatusPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight text-text-primary">Naytra</h1>
-            <p className="text-[11px] text-text-tertiary">BSE Sensex 30 Paper Trading</p>
+            <p className="text-[11px] text-text-tertiary">BSE Sensex 30 Trading</p>
           </div>
         </div>
 
@@ -40,7 +40,7 @@ export const StatusPage: React.FC = () => {
             Naytra is running
           </h2>
           <p className="text-sm text-text-secondary mt-2 max-w-md">
-            Educational paper-trading platform for the BSE Sensex 30. Zero real money, double-entry ledger, and deterministic market replay.
+            Trading platform for the BSE Sensex 30 with INR wallet, double-entry ledger, and deterministic market data.
           </p>
 
           {/* System Status Cards */}
@@ -89,7 +89,7 @@ export const StatusPage: React.FC = () => {
 
       {/* Footer */}
       <footer className="max-w-5xl w-full mx-auto pt-8 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between text-xs text-text-tertiary gap-2">
-        <p>© 2026 Naytra. For educational paper-trading only. No real funds.</p>
+        <p>© 2026 Naytra. BSE Sensex 30 Trading Platform.</p>
         <p className="font-mono text-[11px]">M0 Foundation + Step 1 Design Verified</p>
       </footer>
     </div>

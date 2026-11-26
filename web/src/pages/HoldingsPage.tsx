@@ -3,17 +3,8 @@ import { Card3D } from '../design/Card3D';
 import { Tabs } from '../design/Tabs';
 import { Skeleton } from '../design/Skeleton';
 import { Eye, EyeOff, Briefcase, TrendingUp, TrendingDown } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useSyncedWallet } from '../context/WalletContext';
 import { fetchMarketTickers, MarketTicker } from '../services/marketService';
-import {
-  getFirestoreWallet,
-  getFirestorePortfolio,
-  getFirestoreWatchlist,
-  toggleWatchlistSymbol,
-  executePaperTradeInFirestore,
-  type WalletDoc,
-  type PortfolioDoc,
-} from '../services/firestoreService';
 import { HoldingsTable, type HoldingsRowData } from '../components/holdings/HoldingsTable';
 import { OrderTicketPanel } from '../components/holdings/OrderTicketPanel';
 import { StockChartModal } from '../components/market/StockChartModal';
@@ -42,45 +33,39 @@ function signedPct(pct: number): string {
 /* ── Component ────────────────────────────────────────────────────────────── */
 
 export const HoldingsPage: React.FC = () => {
-  const { user } = useAuth();
-  const uid = user?.uid;
+  const {
+    wallet,
+    portfolio,
+    watchlist,
+    refreshFinancials,
+    executeTrade,
+    toggleWatchlist,
+  } = useSyncedWallet();
 
-  /* State */
+  /* Local UI & market ticker state */
   const [tickers, setTickers] = useState<MarketTicker[]>([]);
-  const [wallet, setWallet] = useState<WalletDoc | null>(null);
-  const [portfolio, setPortfolio] = useState<PortfolioDoc | null>(null);
-  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingTickers, setLoadingTickers] = useState(true);
   const [activeTab, setActiveTab] = useState('holdings');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
   const [hideValues, setHideValues] = useState(false);
 
-  /* ── Data fetching ──────────────────────────────────────────────────────── */
-
-  const refreshData = useCallback(async () => {
-    if (!uid) return;
-    try {
-      const [tickerData, walletData, portfolioData, watchlistData] = await Promise.all([
-        fetchMarketTickers(),
-        getFirestoreWallet(uid),
-        getFirestorePortfolio(uid),
-        getFirestoreWatchlist(uid),
-      ]);
-      if (tickerData?.length) setTickers(tickerData);
-      setWallet(walletData);
-      setPortfolio(portfolioData);
-      setWatchlistSymbols(watchlistData);
-    } catch (err) {
-      console.warn('HoldingsPage data refresh error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [uid]);
+  /* ── Fetch live Sensex 30 prices & refresh synced wallet ────────────────── */
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    let cancelled = false;
+    Promise.all([fetchMarketTickers(), refreshFinancials()])
+      .then(([tickerData]) => {
+        if (!cancelled && tickerData?.length) setTickers(tickerData);
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (!cancelled) setLoadingTickers(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshFinancials]);
 
   /* ── Ticker lookup map ──────────────────────────────────────────────────── */
 
@@ -95,30 +80,41 @@ export const HoldingsPage: React.FC = () => {
   const holdings = portfolio?.holdings ?? [];
 
   const holdingsRows: HoldingsRowData[] = useMemo(() => {
-    return holdings
-      .map((h) => {
-        const ticker = tickerMap.get(h.symbol.toUpperCase());
-        if (!ticker) return null;
-        const avgPriceInr = h.avg_price_paise / 100;
-        const investedInr = h.invested_paise / 100;
-        const currentValueInr = ticker.price * h.quantity;
-        const totalReturnInr = currentValueInr - investedInr;
-        const totalReturnPct = investedInr > 0 ? (totalReturnInr / investedInr) * 100 : 0;
-        return {
-          symbol: h.symbol,
-          name: h.name || ticker.name,
-          sector: ticker.sector,
-          ticker,
-          quantity: h.quantity,
-          avgPriceInr,
-          investedInr,
-          currentValueInr,
-          totalReturnInr,
-          totalReturnPct,
-          orderMode: h.order_mode,
-        } satisfies HoldingsRowData;
-      })
-      .filter(Boolean) as HoldingsRowData[];
+    return holdings.map((h) => {
+      const live = tickerMap.get(h.symbol.toUpperCase());
+      const fallbackPrice = h.avg_price_paise / 100;
+      const ticker: MarketTicker = live || {
+        symbol: h.symbol,
+        name: h.name || h.symbol,
+        sector: 'BSE Sensex',
+        bse_code: '',
+        price: fallbackPrice,
+        open: fallbackPrice,
+        high: fallbackPrice,
+        low: fallbackPrice,
+        change: 0,
+        change_pct: 0,
+        volume: 0,
+      };
+      const avgPriceInr = h.avg_price_paise / 100;
+      const investedInr = h.invested_paise / 100;
+      const currentValueInr = ticker.price * h.quantity;
+      const totalReturnInr = currentValueInr - investedInr;
+      const totalReturnPct = investedInr > 0 ? (totalReturnInr / investedInr) * 100 : 0;
+      return {
+        symbol: h.symbol,
+        name: h.name || ticker.name,
+        sector: ticker.sector,
+        ticker,
+        quantity: h.quantity,
+        avgPriceInr,
+        investedInr,
+        currentValueInr,
+        totalReturnInr,
+        totalReturnPct,
+        orderMode: h.order_mode,
+      } satisfies HoldingsRowData;
+    });
   }, [holdings, tickerMap]);
 
   const exploreRows: HoldingsRowData[] = useMemo(() => {
@@ -138,7 +134,7 @@ export const HoldingsPage: React.FC = () => {
   /* 1D returns: sum of (day_change * quantity) for each holding */
   const oneDayReturnInr = holdingsRows.reduce(
     (s, r) => s + (r.ticker.change ?? 0) * (r.quantity ?? 0),
-    0,
+    0
   );
   const oneDayReturnPct =
     totalCurrentValueInr > 0
@@ -161,11 +157,9 @@ export const HoldingsPage: React.FC = () => {
 
   const handleToggleWatchlist = useCallback(
     async (symbol: string) => {
-      if (!uid) return;
-      const next = await toggleWatchlistSymbol(uid, symbol);
-      setWatchlistSymbols(next);
+      await toggleWatchlist(symbol);
     },
-    [uid],
+    [toggleWatchlist]
   );
 
   const handleExecuteOrder = useCallback(
@@ -178,36 +172,12 @@ export const HoldingsPage: React.FC = () => {
       quantity: number;
       executionPriceInr: number;
     }) => {
-      if (!uid) return;
-      const result = await executePaperTradeInFirestore(uid, payload);
-      setWallet(result.wallet);
-      setPortfolio(result.portfolio);
+      await executeTrade(payload);
     },
-    [uid],
+    [executeTrade]
   );
 
-  /* ── Loading state ──────────────────────────────────────────────────────── */
-
-  if (loading) {
-    return (
-      <div className="space-y-6 max-w-7xl mx-auto">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-text-primary">
-            Holdings & Sensex 30
-          </h1>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
-          <div className="space-y-4">
-            <Skeleton width="100%" height="120px" className="rounded-xl" />
-            <Skeleton width="100%" height="320px" className="rounded-xl" />
-          </div>
-          <Skeleton width="100%" height="460px" className="rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
-  const cashPaise = wallet?.balance_paise ?? 0;
+  const cashPaise = wallet.balance_paise;
   const hasHoldings = holdingsRows.length > 0;
 
   return (
@@ -218,7 +188,7 @@ export const HoldingsPage: React.FC = () => {
           Holdings & Sensex 30
         </h1>
         <p className="text-sm text-text-secondary mt-0.5">
-          Track virtual portfolio positions and explore all 30 constituent stocks
+          Track portfolio positions and explore all 30 constituent stocks
         </p>
       </div>
 
@@ -249,12 +219,10 @@ export const HoldingsPage: React.FC = () => {
 
             {hasHoldings ? (
               <>
-                {/* Total Current Value (large) */}
                 <div className="text-2xl font-extrabold font-mono text-text-primary mb-3">
                   {hideValues ? '₹••••••' : formatINR(totalCurrentValueInr)}
                 </div>
 
-                {/* Metrics Row */}
                 <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs">
                   <div>
                     <span className="text-text-tertiary">Invested value</span>
@@ -291,9 +259,9 @@ export const HoldingsPage: React.FC = () => {
             ) : (
               <div className="py-6 text-center space-y-2">
                 <TrendingUp className="w-8 h-8 text-text-tertiary mx-auto" aria-hidden="true" />
-                <p className="text-sm font-semibold text-text-secondary">No virtual holdings yet</p>
+                <p className="text-sm font-semibold text-text-secondary">No holdings yet</p>
                 <p className="text-xs text-text-tertiary max-w-xs mx-auto">
-                  Switch to the "Sensex 30" tab and buy your first stock to start paper trading!
+                  Switch to the &quot;Sensex 30&quot; tab and buy your first stock to start trading!
                 </p>
               </div>
             )}
@@ -310,14 +278,16 @@ export const HoldingsPage: React.FC = () => {
           />
 
           {/* ── Table ────────────────────────────────────────────────────── */}
-          {activeTab === 'holdings' ? (
+          {loadingTickers && tickers.length === 0 ? (
+            <Skeleton width="100%" height="260px" className="rounded-xl" />
+          ) : activeTab === 'holdings' ? (
             hasHoldings ? (
               <HoldingsTable
                 mode="holdings"
                 rows={holdingsRows}
                 selectedSymbol={selectedSymbol}
                 hideValues={hideValues}
-                watchlistSymbols={watchlistSymbols}
+                watchlistSymbols={watchlist}
                 onSelectStock={handleSelectStock}
                 onOpenChart={handleOpenChart}
                 onToggleWatchlist={handleToggleWatchlist}
@@ -345,7 +315,7 @@ export const HoldingsPage: React.FC = () => {
               rows={exploreRows}
               selectedSymbol={selectedSymbol}
               hideValues={false}
-              watchlistSymbols={watchlistSymbols}
+              watchlistSymbols={watchlist}
               onSelectStock={handleSelectStock}
               onOpenChart={handleOpenChart}
               onToggleWatchlist={handleToggleWatchlist}
@@ -354,7 +324,10 @@ export const HoldingsPage: React.FC = () => {
         </div>
 
         {/* ━━ RIGHT COLUMN (Order Ticket) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <div className="lg:sticky lg:top-6">
+        <div
+          data-testid="holdings-sticky-panel"
+          className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:p-1 lg:-m-1"
+        >
           <OrderTicketPanel
             selectedTicker={selectedTicker}
             availableCashPaise={cashPaise}
@@ -372,6 +345,7 @@ export const HoldingsPage: React.FC = () => {
           symbol={chartSymbol}
           isOpen={!!chartSymbol}
           onClose={() => setChartSymbol(null)}
+          onTradeSuccess={refreshFinancials}
         />
       )}
     </div>

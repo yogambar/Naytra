@@ -5,6 +5,7 @@ import { Sparkles, ArrowRight, ShieldCheck, Gift, TrendingUp } from 'lucide-reac
 import { CoinVirtualFallback } from '../three/Fallbacks';
 import { Button } from '../design/Button';
 import { useAuth } from '../context/AuthContext';
+import { useSyncedWallet } from '../context/WalletContext';
 import { hapticTick, hapticSuccess } from '../utils/haptics';
 
 const CoinVirtual3D = React.lazy(() =>
@@ -14,7 +15,11 @@ const CoinVirtual3D = React.lazy(() =>
 export const SignupBonusPage: React.FC = () => {
   const navigate = useNavigate();
   const { claimBonus } = useAuth();
+  const { wallet } = useSyncedWallet();
   const [claiming, setClaiming] = useState(false);
+
+  const bonusInr = Math.round((wallet?.initial_grant_paise || 0) / 100);
+  const bonusDisplay = bonusInr > 0 ? `₹${bonusInr}` : 'up to ₹100';
 
   const handleStartTrading = async () => {
     hapticTick();
@@ -70,11 +75,11 @@ export const SignupBonusPage: React.FC = () => {
             Congratulations! 🎉
           </h1>
           <p className="text-lg sm:text-xl text-text-secondary leading-relaxed">
-            You've received{' '}
+            You&apos;ve received{' '}
             <span className="text-brand-marigold-text font-extrabold text-2xl sm:text-3xl">
-              ₹10,000
+              {bonusDisplay}
             </span>{' '}
-            in virtual practice funds!
+            in your trading wallet!
           </p>
         </motion.div>
 
@@ -91,7 +96,7 @@ export const SignupBonusPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-raised border border-surface-border text-xs font-semibold text-text-secondary">
             <Sparkles className="w-3.5 h-3.5 text-brand-marigold" />
-            <span>Zero Risk Practice</span>
+            <span>Instant INR Credit</span>
           </div>
         </motion.div>
 
@@ -102,8 +107,8 @@ export const SignupBonusPage: React.FC = () => {
           transition={{ delay: 0.5, duration: 0.4 }}
           className="text-sm text-text-secondary leading-relaxed max-w-sm mx-auto"
         >
-          Use your virtual funds to explore paper trading on the BSE Sensex 30. 
-          Learn market strategies with zero risk — no real money is involved.
+          Your random welcome bonus (₹1–₹100) has been credited to your INR wallet.
+          Start buying and selling BSE Sensex 30 stocks right away.
         </motion.p>
 
         {/* CTA Button */}
@@ -126,7 +131,7 @@ export const SignupBonusPage: React.FC = () => {
           </Button>
         </motion.div>
 
-        {/* Virtual funds disclaimer */}
+        {/* Wallet balance notice */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -134,7 +139,7 @@ export const SignupBonusPage: React.FC = () => {
           className="text-xs font-semibold text-text-tertiary flex items-center justify-center gap-1.5 pt-2"
         >
           <ShieldCheck className="w-3.5 h-3.5 text-brand-up" />
-          <span>Virtual, non-withdrawable funds for educational practice only.</span>
+          <span>100% real INR balance credited directly to your wallet.</span>
         </motion.div>
       </div>
     </div>

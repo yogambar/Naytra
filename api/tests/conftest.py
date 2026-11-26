@@ -25,8 +25,8 @@ def _test_settings(**overrides) -> Settings:
         REDIS_URL="redis://localhost:6379/0",
         DEBUG=True,
         DATA_MODE="REPLAY",
-        SIGNUP_BONUS_MIN_INR=1000,
-        SIGNUP_BONUS_MAX_INR=10000,
+        SIGNUP_BONUS_MIN_INR=1,
+        SIGNUP_BONUS_MAX_INR=100,
         SIGNUP_BONUS_ENABLED=True,
         APP_VERSION="0.1.0-test",
     )

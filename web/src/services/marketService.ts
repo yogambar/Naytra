@@ -1,7 +1,7 @@
 /**
  * Abstracted Market Data & Trading Service for Naytra Client App.
  * Implements Tier-1 Client-Side Caching with Stale-While-Revalidate (SWR),
- * ETag caching, and integer-paise paper trade execution.
+ * ETag caching, and integer-paise trade execution.
  * The client communicates only with the abstracted API Gateway.
  */
 

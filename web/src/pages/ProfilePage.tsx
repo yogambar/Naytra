@@ -44,7 +44,7 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
-  const displayName = profile?.name || user?.displayName || 'Registered Paper Trader';
+  const displayName = profile?.name || user?.displayName || 'Registered Trader';
   const displayEmail = profile?.email || user?.email || 'trader@naytra.local';
   const isVerified = Boolean(profile?.email_verified || user?.emailVerified);
 
@@ -213,7 +213,7 @@ export const ProfilePage: React.FC = () => {
           <div>
             <span className="text-sm font-semibold text-text-primary block">Delete Account</span>
             <span className="text-xs text-text-secondary">
-              Permanently erase your account, virtual wallet, and trading history from Firestore.
+              Permanently erase your account, wallet, and trading history from Firestore.
             </span>
           </div>
 

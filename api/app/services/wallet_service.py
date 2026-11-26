@@ -1,4 +1,4 @@
-"""Virtual Wallet & Double-Entry Ledger Service.
+"""Wallet & Double-Entry Ledger Service.
 
 All monetary values are tracked in integer paise (1 INR = 100 paise).
 Every financial event generates paired double-entry ledger rows that sum to 0.
@@ -6,6 +6,7 @@ Every financial event generates paired double-entry ledger rows that sum to 0.
 from __future__ import annotations
 
 import logging
+import secrets
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -22,8 +23,15 @@ from app.schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Default virtual signup bonus: ₹10,000 = 1,000,000 paise
-DEFAULT_SIGNUP_BONUS_PAISE = 10_000 * 100
+# Default welcome signup bonus cap: ₹1 to ₹100
+DEFAULT_SIGNUP_BONUS_PAISE = 100 * 100
+
+
+def roll_signup_bonus_paise(min_inr: int, max_inr: int) -> int:
+    """Select an integer INR bonus uniformly between min_inr and max_inr inclusive."""
+    low = max(1, min(min_inr, max_inr))
+    high = max(low, max_inr)
+    return (low + secrets.randbelow(high - low + 1)) * 100
 
 
 async def get_or_create_wallet(
@@ -31,7 +39,7 @@ async def get_or_create_wallet(
     user_id: str,
     bonus_paise: int | None = None,
 ) -> Wallet:
-    """Retrieve an existing wallet or create one with double-entry signup bonus."""
+    """Retrieve an existing wallet or create one with double-entry random signup bonus (₹1–₹100)."""
     result = await session.execute(select(Wallet).where(Wallet.user_id == user_id))
     wallet = result.scalar_one_or_none()
 
@@ -39,7 +47,11 @@ async def get_or_create_wallet(
         return wallet
 
     settings = get_settings()
-    grant_paise = bonus_paise if bonus_paise is not None else (settings.SIGNUP_BONUS_MAX_INR * 100)
+    grant_paise = (
+        bonus_paise
+        if bonus_paise is not None
+        else roll_signup_bonus_paise(settings.SIGNUP_BONUS_MIN_INR, settings.SIGNUP_BONUS_MAX_INR)
+    )
     if not settings.SIGNUP_BONUS_ENABLED:
         grant_paise = 0
 
@@ -67,7 +79,7 @@ async def get_or_create_wallet(
             amount_paise=-grant_paise,
             balance_after_paise=0,
             ref_id=None,
-            description=f"Virtual signup grant issued to user {user_id}",
+            description=f"Signup bonus grant issued to user {user_id}",
         )
         user_entry = LedgerEntry(
             id=f"ledg_{uuid4().hex[:12]}",
@@ -80,14 +92,14 @@ async def get_or_create_wallet(
             amount_paise=grant_paise,
             balance_after_paise=grant_paise,
             ref_id=None,
-            description="Initial Virtual Signup Bonus",
+            description="Welcome Signup Bonus",
         )
         session.add(system_entry)
         session.add(user_entry)
 
     await session.commit()
     await session.refresh(wallet)
-    logger.info("Initialized virtual wallet for user %s with balance %d paise", user_id, grant_paise)
+    logger.info("Initialized wallet for user %s with balance %d paise", user_id, grant_paise)
     return wallet
 
 
@@ -96,8 +108,12 @@ async def get_wallet_data(session: AsyncSession, user_id: str) -> WalletData:
     wallet = await get_or_create_wallet(session, user_id)
     total_cash_paise = wallet.balance_paise + wallet.locked_paise
 
-    settings = get_settings()
-    initial_grant_paise = settings.SIGNUP_BONUS_MAX_INR * 100
+    bonus_stmt = select(LedgerEntry.credit_paise).where(
+        LedgerEntry.user_id == user_id,
+        LedgerEntry.type == "SIGNUP_BONUS",
+    )
+    bonus_res = await session.execute(bonus_stmt)
+    initial_grant_paise = bonus_res.scalar_one_or_none() or 0
 
     return WalletData(
         user_id=wallet.user_id,
@@ -110,7 +126,7 @@ async def get_wallet_data(session: AsyncSession, user_id: str) -> WalletData:
         initial_grant_paise=initial_grant_paise,
         initial_grant_inr=initial_grant_paise / 100.0,
         currency="INR",
-        is_virtual=True,
+        is_virtual=False,
     )
 
 

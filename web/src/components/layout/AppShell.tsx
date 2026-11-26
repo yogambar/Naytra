@@ -7,6 +7,7 @@ import { useAndroidBack } from '../../hooks/useAndroidBack';
 import { useStatusBar } from '../../hooks/useStatusBar';
 import { hapticTick } from '../../utils/haptics';
 import { ThemeToggle } from '../../design/ThemeToggle';
+import { useSyncedWallet } from '../../context/WalletContext';
 
 interface NavItem {
   id: string;
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
 export const AppShell: React.FC = () => {
   const location = useLocation();
   const { prefersReducedMotion } = useMotionPrefs();
+  const { wallet } = useSyncedWallet();
 
   // Register native Android back button and status bar styling
   useAndroidBack();
@@ -34,6 +36,14 @@ export const AppShell: React.FC = () => {
   const handleTabClick = () => {
     hapticTick();
   };
+
+  const balanceRaw = (wallet?.balance_paise ?? 0) / 100;
+  const syncedCashFormatted = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: balanceRaw < 1000 ? 2 : 0,
+  }).format(balanceRaw);
 
   return (
     <div
@@ -87,7 +97,12 @@ export const AppShell: React.FC = () => {
                     />
                   )}
                   <Icon className={`w-5 h-5 ${isActive ? 'text-brand-marigold' : 'text-text-tertiary'}`} />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {item.id === 'wallet' && (
+                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-surface-base text-brand-up border border-brand-up/30">
+                      {syncedCashFormatted}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}
@@ -121,7 +136,8 @@ export const AppShell: React.FC = () => {
       </aside>
 
       {/* ── Main Content Area with Shared-Axis Page Transitions ────── */}
-      <main className="flex-1 flex flex-col p-4 sm:p-8 pb-28 md:pb-8 max-w-full overflow-x-hidden">
+      {/* overflow-x-clip prevents horizontal bleed without creating a scroll container that breaks position:sticky */}
+      <main className="flex-1 flex flex-col p-4 sm:p-8 pb-28 md:pb-8 max-w-full overflow-x-clip">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}

@@ -24,7 +24,7 @@ export const LearnPage: React.FC = () => {
     {
       id: 3,
       title: 'Module 3: Order Execution & Market Mechanics',
-      desc: 'Market orders vs limit orders, order books, and realistic slippage simulation in paper trading.',
+      desc: 'Market orders vs limit orders, order books, and execution slippage in active equity markets.',
       duration: '6 min',
       progress: 0,
       completed: false,
