@@ -288,19 +288,25 @@ export const WalletPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Two-Column Groww Layout: Balance Card (Left) + Add Money / Withdraw (Right) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_390px] gap-6 items-start">
+      {/* ── Two-Column Groww Layout: Equal Balance Card (Left) + Add Money / Withdraw (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* ━━ LEFT: Balance Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-        <Card3D elevation="e2" interactive={false} className="overflow-hidden border border-surface-border">
-          <div className="p-6 text-center space-y-2">
+        <Card3D
+          data-testid="wallet-balance-card"
+          elevation="e2"
+          interactive={false}
+          className="h-full overflow-hidden border border-surface-border flex flex-col justify-between"
+        >
+          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center space-y-2">
             <span className="text-xs font-bold uppercase tracking-wider text-text-tertiary block">
               Available Balance
             </span>
-            <div className="text-3xl sm:text-4xl font-extrabold font-mono text-text-primary">
+            <div
+              data-testid="wallet-available-balance"
+              title={`${wallet.balance_paise.toLocaleString('en-IN')} paise`}
+              className="text-3xl sm:text-4xl font-extrabold font-mono text-text-primary tabular-nums"
+            >
               {formatINR(cashInr)}
-            </div>
-            <div className="text-xs font-mono text-text-tertiary">
-              ({wallet.balance_paise.toLocaleString('en-IN')} paise)
             </div>
           </div>
 
@@ -357,13 +363,15 @@ export const WalletPage: React.FC = () => {
         </Card3D>
 
         {/* ━━ RIGHT: Minimal Groww Add Money / Withdraw Card ━━━━━━━━━━━━━━━ */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        <div className="h-full">
         <Card3D
+          data-testid="wallet-action-card"
           elevation="e2"
           interactive={false}
-          className="overflow-hidden border border-surface-border bg-surface-raised"
+          className="h-full overflow-hidden border border-surface-border bg-surface-raised flex flex-col"
         >
           <RadixTabs.Root
+            className="h-full flex flex-col"
             value={activeFundTab}
             onValueChange={(v) => {
               setActiveFundTab(v as 'deposit' | 'withdraw');
@@ -390,8 +398,15 @@ export const WalletPage: React.FC = () => {
             </RadixTabs.List>
 
             {/* ── TAB 1: ADD MONEY ─────────────────────────────────────────── */}
-            <RadixTabs.Content value="deposit" className="focus:outline-none">
-              <form onSubmit={handleDepositSubmit} noValidate className="p-5 space-y-5">
+            <RadixTabs.Content
+              value="deposit"
+              className="flex-1 flex flex-col focus:outline-none data-[state=inactive]:hidden"
+            >
+              <form
+                onSubmit={handleDepositSubmit}
+                noValidate
+                className="p-5 flex-1 flex flex-col justify-between gap-5"
+              >
                 <div className="text-center space-y-2 pt-1">
                   <label
                     htmlFor={depositInputId}
@@ -476,8 +491,15 @@ export const WalletPage: React.FC = () => {
             </RadixTabs.Content>
 
             {/* ── TAB 2: WITHDRAW ──────────────────────────────────────────── */}
-            <RadixTabs.Content value="withdraw" className="focus:outline-none">
-              <form onSubmit={handleWithdrawSubmit} noValidate className="p-5 space-y-5">
+            <RadixTabs.Content
+              value="withdraw"
+              className="flex-1 flex flex-col focus:outline-none data-[state=inactive]:hidden"
+            >
+              <form
+                onSubmit={handleWithdrawSubmit}
+                noValidate
+                className="p-5 flex-1 flex flex-col justify-between gap-5"
+              >
                 <div className="text-center space-y-2 pt-1">
                   <label
                     htmlFor={withdrawInputId}

@@ -31,12 +31,21 @@ vi.mock('../context/AuthContext', () => ({
   }),
 }));
 
+function formatExpectedINR(paise: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(paise / 100);
+}
+
 describe('WalletPage Component', () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
-  it('renders Groww-style header, balance card, and random ₹1–₹100 signup bonus in integer paise', () => {
+  it('renders Groww-style equal left/right cards without paise subtitle and with ₹1–₹100 signup bonus', () => {
     render(
       <MemoryRouter>
         <WalletPage />
@@ -53,9 +62,10 @@ describe('WalletPage Component', () => {
     expect(seededWallet.balance_paise).toBeLessThanOrEqual(10_000);
     expect(seededWallet.balance_paise % 100).toBe(0);
 
-    expect(
-      screen.getByText(new RegExp(`${seededWallet.balance_paise.toLocaleString('en-IN')} paise`, 'i'))
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('wallet-available-balance')).toHaveTextContent(
+      formatExpectedINR(seededWallet.balance_paise)
+    );
+    expect(screen.queryByText(/\([0-9,]+\s+paise\)/i)).not.toBeInTheDocument();
   });
 
   it('renders balance breakdown and ledger entries without signup bonus badge or virtual labels', () => {
@@ -98,9 +108,9 @@ describe('WalletPage Component', () => {
 
     const expectedPaise = initialPaise + 50_000;
     await waitFor(() => {
-      expect(
-        screen.getByText(new RegExp(`${expectedPaise.toLocaleString('en-IN')} paise`, 'i'))
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('wallet-available-balance')).toHaveTextContent(
+        formatExpectedINR(expectedPaise)
+      );
     });
     expect(screen.getAllByText(/Deposited ₹500\.00/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('DEPOSIT')).toBeInTheDocument();
@@ -138,9 +148,9 @@ describe('WalletPage Component', () => {
 
     const remainingPaise = fundedPaise - 40_000;
     await waitFor(() => {
-      expect(
-        screen.getByText(new RegExp(`${remainingPaise.toLocaleString('en-IN')} paise`, 'i'))
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('wallet-available-balance')).toHaveTextContent(
+        formatExpectedINR(remainingPaise)
+      );
     });
     expect(screen.getAllByText(/Withdrew ₹400\.00/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('WITHDRAWAL')).toBeInTheDocument();
@@ -185,9 +195,9 @@ describe('WalletPage Component', () => {
 
     const expectedPaise = initialPaise + 500_000 - 300_000;
     await waitFor(() => {
-      expect(
-        screen.getByText(new RegExp(`${expectedPaise.toLocaleString('en-IN')} paise`, 'i'))
-      ).toBeInTheDocument();
+      expect(screen.getByTestId('wallet-available-balance')).toHaveTextContent(
+        formatExpectedINR(expectedPaise)
+      );
     });
     expect(screen.getByText(/BUY \(Delivery\) 2 RELIANCE/i)).toBeInTheDocument();
     expect(screen.getByText(/1 Open/i)).toBeInTheDocument();

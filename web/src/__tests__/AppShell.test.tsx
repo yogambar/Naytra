@@ -128,7 +128,7 @@ describe('AppShell & Navigation', () => {
     expect(screen.getByText(/AI forecasting is coming in Phase 2/i)).toBeInTheDocument();
   });
 
-  it('navigates to Wallet page and shows integer paise breakdown', async () => {
+  it('navigates to Wallet page and shows equal-sized cards without raw paise subtitle', async () => {
     render(
       <MemoryRouter initialEntries={['/wallet']}>
         <App />
@@ -136,7 +136,8 @@ describe('AppShell & Navigation', () => {
     );
 
     expect(await screen.findByRole('heading', { name: /Wallet & Ledger/i })).toBeInTheDocument();
-    expect(await screen.findByText(/[1-9][0-9,]* paise/i)).toBeInTheDocument();
+    expect(screen.getByTestId('wallet-available-balance')).toHaveTextContent(/₹/);
+    expect(screen.queryByText(/\([0-9,]+\s+paise\)/i)).not.toBeInTheDocument();
     expect(await screen.findByText(/Double-entry ledger in integer paise/i)).toBeInTheDocument();
   });
 
