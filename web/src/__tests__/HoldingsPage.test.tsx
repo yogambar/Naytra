@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -60,6 +60,9 @@ vi.mock('../services/marketService', async (importOriginal) => {
         volume: 95000,
       },
     ]),
+    fetchStockChart: vi.fn().mockResolvedValue(null),
+    fetchStockInsight: vi.fn().mockResolvedValue(null),
+    fetchStockNews: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -100,6 +103,7 @@ describe('HoldingsPage Segments (All / Delivery / Intraday)', () => {
 
     expect(await screen.findByRole('heading', { name: /^Holdings$/i })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Sensex 30/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Actions/i })).not.toBeInTheDocument();
 
     const allTab = screen.getByRole('tab', { name: /^All \(2\)$/i });
     const deliveryTab = screen.getByRole('tab', { name: /^Delivery \(1\)$/i });
@@ -109,18 +113,31 @@ describe('HoldingsPage Segments (All / Delivery / Intraday)', () => {
     expect(screen.getByText('Reliance Industries Ltd.')).toBeInTheDocument();
     expect(screen.getByText('Adani Ports & SEZ Ltd.')).toBeInTheDocument();
 
+    // Clicking anywhere on the row (not the name) opens that stock in the right Order Ticket panel
+    const intradaySubline = screen.getByText(/2 shares/i);
+    await user.click(intradaySubline);
+    expect(await screen.findByRole('tab', { name: /^BUY$/i })).toBeInTheDocument();
+
+    // Clicking the company name opens the AI chart dialog
+    const nameBtn = screen.getByRole('button', { name: /Open chart for Reliance Industries Ltd\./i });
+    await user.click(nameBtn);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Close$/i }));
+
     // Switch to Delivery
     await user.click(deliveryTab);
     await waitFor(() => {
-      expect(screen.getByText('Reliance Industries Ltd.')).toBeInTheDocument();
-      expect(screen.queryByText('Adani Ports & SEZ Ltd.')).not.toBeInTheDocument();
+      const tbl = within(screen.getByRole('table'));
+      expect(tbl.getByText('Reliance Industries Ltd.')).toBeInTheDocument();
+      expect(tbl.queryByText('Adani Ports & SEZ Ltd.')).not.toBeInTheDocument();
     });
 
     // Switch to Intraday
     await user.click(intradayTab);
     await waitFor(() => {
-      expect(screen.getByText('Adani Ports & SEZ Ltd.')).toBeInTheDocument();
-      expect(screen.queryByText('Reliance Industries Ltd.')).not.toBeInTheDocument();
+      const tbl = within(screen.getByRole('table'));
+      expect(tbl.getByText('Adani Ports & SEZ Ltd.')).toBeInTheDocument();
+      expect(tbl.queryByText('Reliance Industries Ltd.')).not.toBeInTheDocument();
     });
   });
 });

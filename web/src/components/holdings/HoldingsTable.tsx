@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useId } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, BarChart2 } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Sparkline } from '../../design/Sparkline';
 import type { MarketTicker } from '../../services/marketService';
 
@@ -195,10 +195,6 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                   </button>
                 </th>
               )}
-
-              <th scope="col" className="px-3 py-3 text-right">
-                Actions
-              </th>
             </tr>
           </thead>
 
@@ -216,7 +212,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
               return (
                 <tr
                   key={`${row.symbol}_${row.orderMode || mode}`}
-                  className={`transition-colors ${
+                  onClick={() => onSelectStock(row.symbol, row.orderMode)}
+                  className={`cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-brand-up-bg/40'
                       : 'hover:bg-surface-inset/50'
@@ -224,20 +221,35 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 >
                   {/* Company Cell */}
                   <td className="px-4 py-3.5 align-middle">
-                    <button
-                      type="button"
-                      onClick={() => onSelectStock(row.symbol, row.orderMode)}
-                      className="text-left group focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-marigold rounded"
-                    >
-                      <div className="font-bold text-text-primary group-hover:text-brand-up transition-colors flex items-center gap-1.5">
-                        <span>{row.name}</span>
+                    <div className="flex flex-col items-start">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenChart(row.symbol);
+                          }}
+                          aria-label={`Open chart for ${row.name}`}
+                          title="Open AI Candlestick Chart"
+                          className="font-bold text-left text-text-primary hover:text-purple-400 hover:underline underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-marigold rounded cursor-pointer"
+                        >
+                          {row.name}
+                        </button>
                         {row.orderMode === 'Intraday' && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
                             Intraday
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-text-tertiary mt-0.5 font-mono">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectStock(row.symbol, row.orderMode);
+                        }}
+                        aria-label={`Select ${row.name} in order panel`}
+                        className="text-[11px] text-text-tertiary mt-0.5 font-mono text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-marigold rounded cursor-pointer"
+                      >
                         {mode === 'holdings' ? (
                           hideValues ? (
                             '•• shares • Avg. ₹••••'
@@ -250,8 +262,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         ) : (
                           `${row.symbol} • ${row.sector}`
                         )}
-                      </div>
-                    </button>
+                      </button>
+                    </div>
                   </td>
 
                   {/* Sparkline Trend */}
@@ -336,19 +348,6 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       )}
                     </td>
                   )}
-
-                  {/* Action Buttons */}
-                  <td className="px-3 py-3.5 text-right align-middle">
-                    <button
-                      type="button"
-                      onClick={() => onOpenChart(row.symbol)}
-                      aria-label={`Open AI chart for ${row.name}`}
-                      title="Open AI Candlestick Chart"
-                      className="p-2 rounded-lg text-text-tertiary hover:text-purple-400 hover:bg-surface-inset transition-colors"
-                    >
-                      <BarChart2 className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                  </td>
                 </tr>
               );
             })}
