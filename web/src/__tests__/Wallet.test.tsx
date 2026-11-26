@@ -58,15 +58,15 @@ describe('WalletPage Component', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders signup bonus badge and ledger breakdown without paper/virtual labels', () => {
+  it('renders balance breakdown and ledger entries without signup bonus badge or virtual labels', () => {
     render(
       <MemoryRouter>
         <WalletPage />
       </MemoryRouter>
     );
 
-    expect(screen.getAllByText(/Signup Bonus/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Initial Bonus/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Signup Bonus Credited/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Initial Bonus/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Locked/i)).toBeInTheDocument();
     expect(screen.getByText(/Realized Gains/i)).toBeInTheDocument();
     expect(screen.getByText(/Total Net Worth/i)).toBeInTheDocument();

@@ -6,7 +6,6 @@ import { Button } from '../design/Button';
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  ShieldCheck,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
@@ -105,7 +104,6 @@ export const WalletPage: React.FC = () => {
   // Derive synced wallet & portfolio metrics
   const cashInr = wallet.balance_paise / 100;
   const lockedInr = wallet.locked_paise / 100;
-  const initialGrantInr = wallet.initial_grant_paise / 100;
   const realizedGainsInr = (portfolio.realized_pnl_paise || 0) / 100;
 
   const tickerMap = new Map(tickers.map((t) => [t.symbol.toUpperCase(), t.price]));
@@ -304,18 +302,6 @@ export const WalletPage: React.FC = () => {
             <div className="text-xs font-mono text-text-tertiary">
               ({wallet.balance_paise.toLocaleString('en-IN')} paise)
             </div>
-
-            <div className="pt-2 flex justify-center">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-inset border border-surface-border text-xs">
-                <ShieldCheck className="w-4 h-4 text-brand-up shrink-0" aria-hidden="true" />
-                <span>
-                  <strong className="text-text-primary">Signup Bonus</strong>{' '}
-                  <span className="text-text-tertiary">
-                    Credited {formatINR(initialGrantInr)}
-                  </span>
-                </span>
-              </div>
-            </div>
           </div>
 
           <div className="border-t border-surface-border divide-y divide-surface-border text-sm">
@@ -339,20 +325,17 @@ export const WalletPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="px-5 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-inset/30">
-              <div>
-                <span className="text-[11px] text-text-tertiary uppercase block">Initial Bonus</span>
-                <span className="text-sm font-bold font-mono text-text-primary">
-                  {formatINR(initialGrantInr)}
-                </span>
-              </div>
-              <div>
+            <div className="px-5 py-3.5 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-surface-inset/30">
+              <div title="Funds reserved for pending orders or withdrawals (₹0 when orders execute immediately)">
                 <span className="text-[11px] text-text-tertiary uppercase block">Locked</span>
                 <span className="text-sm font-bold font-mono text-text-primary">
                   {formatINR(lockedInr)}
                 </span>
               </div>
-              <div>
+              <div
+                className="sm:text-center"
+                title="Booked profit or loss realized after selling stock positions"
+              >
                 <span className="text-[11px] text-text-tertiary uppercase block">Realized Gains</span>
                 <span
                   className={`text-sm font-bold font-mono ${
@@ -363,7 +346,7 @@ export const WalletPage: React.FC = () => {
                   {formatINR(realizedGainsInr)}
                 </span>
               </div>
-              <div>
+              <div className="sm:text-right">
                 <span className="text-[11px] text-text-tertiary uppercase block">Total Net Worth</span>
                 <span className="text-sm font-extrabold font-mono text-text-primary">
                   {formatINR(totalNetWorthInr)}
