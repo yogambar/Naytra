@@ -94,6 +94,9 @@ class MarketReasoner:
         support = round(price * 0.985, 2)
         resistance = round(price * 1.018, 2)
 
+        lead_headline = news_headlines[0].strip() if news_headlines else ""
+        news_note = f" Latest market catalyst: {lead_headline}." if lead_headline else ""
+
         if is_bullish:
             stance = "BULLISH"
             risk = "MODERATE"
@@ -101,9 +104,13 @@ class MarketReasoner:
             summary = (
                 f"{name} ({sector}) is demonstrating resilient accumulation near ₹{price:,.2f}. "
                 f"The ML forecasting model projects an upward trajectory toward ₹{target_price:,.2f} "
-                f"for today's closing candles, supported by sustained volume expansion and positive sector momentum."
+                f"for today's closing candles, supported by sustained volume expansion.{news_note}"
             )
-            catalyst = f"Institutional accumulation in {sector} and bullish derivative roll-overs"
+            catalyst = (
+                lead_headline[:96]
+                if lead_headline
+                else f"Institutional accumulation in {sector} and bullish derivative roll-overs"
+            )
         else:
             stance = "BEARISH"
             risk = "HIGH" if abs(change_pct) > 2.0 else "MODERATE"
@@ -111,9 +118,13 @@ class MarketReasoner:
             summary = (
                 f"{name} faces mild intraday supply pressure at ₹{price:,.2f} with a {change_pct:+.2f}% delta. "
                 f"ML predictive candles indicate a mean-reversion test toward support at ₹{support:,.2f} "
-                f"before broader intraday stabilization."
+                f"before broader intraday stabilization.{news_note}"
             )
-            catalyst = f"Profit-taking following recent benchmark highs and selective profit booking"
+            catalyst = (
+                lead_headline[:96]
+                if lead_headline
+                else "Profit-taking following recent benchmark highs and selective profit booking"
+            )
 
         return {
             "symbol": symbol,

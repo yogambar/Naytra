@@ -94,6 +94,25 @@ async def get_market_insight(symbol: str, response: Response):
         raise HTTPException(status_code=503, detail="Market reasoning engine temporarily unavailable")
 
 
+@router.get("/news/{symbol}")
+async def get_market_news(symbol: str, response: Response):
+    """Returns curated & live news articles for the specific BSE Sensex constituent."""
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            target_url = f"{ENGINE_URL}/api/v1/market/news/{symbol.upper()}"
+            res = await client.get(target_url)
+            if res.status_code == 404:
+                raise HTTPException(status_code=404, detail=f"Ticker '{symbol}' not found")
+            if res.status_code != 200:
+                raise HTTPException(status_code=res.status_code, detail="Engine error")
+            return res.json()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=503, detail="Market news service temporarily unavailable")
+
+
 @router.get("/quote/{symbol}")
 async def get_market_quote(symbol: str, response: Response):
     """Returns single quote for a ticker."""

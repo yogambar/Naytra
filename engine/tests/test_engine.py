@@ -12,6 +12,7 @@ import time
 from app.charts.candle_manager import Candle, CandleStore
 from app.models.candle_predictor import CandlePredictor
 from app.llm.market_reasoner import MarketReasoner
+from app.ingestion.market_worker import MarketIngestionWorker
 from app.config import settings
 
 
@@ -88,3 +89,44 @@ async def test_llm_reasoner_schema():
     assert "confidence_pct" in insight
     assert insight["confidence_pct"] >= 50
     assert "key_levels" in insight
+
+
+def test_stock_specific_news_resolution_and_word_boundaries():
+    """
+    Verifies stock-specific news isolation and prevents short tickers like LT or ITC
+    from falsely matching unrelated generic headlines (e.g. 'results' or 'switch').
+    """
+    worker = MarketIngestionWorker()
+    worker._has_live_marketaux_news = True
+    worker._latest_news = [
+        {
+            "uuid": "gen_1",
+            "title": "Q4 results lift market sentiment",
+            "summary": "Investors switch focus to broad indices.",
+            "entities": ["BSE Sensex"],
+            "source": "Moneycontrol",
+            "published_at": "2026-11-27T10:00:00+05:30",
+        },
+        {
+            "uuid": "gen_2",
+            "title": "Midcap results outperform expectations",
+            "summary": "Tata Motors SUV dispatches surge while portfolio switch continues.",
+            "entities": ["Tata Motors"],
+            "source": "Livemint",
+            "published_at": "2026-11-27T11:00:00+05:30",
+        },
+    ]
+
+    lt_news = worker.get_news_for_symbol("LT")
+    assert len(lt_news) >= 1
+    assert all(item["symbol"] == "LT" for item in lt_news)
+
+    rel_news = worker.get_news_for_symbol("RELIANCE")
+    assert len(rel_news) >= 1
+    assert all(item["symbol"] == "RELIANCE" for item in rel_news)
+
+    # TCS must not collide with Tata Motors articles despite shared 'Tata' word
+    tcs_news = worker.get_news_for_symbol("TCS")
+    assert len(tcs_news) >= 1
+    assert all(item["symbol"] == "TCS" for item in tcs_news)
+    assert tcs_news[0]["title"] != rel_news[0]["title"]

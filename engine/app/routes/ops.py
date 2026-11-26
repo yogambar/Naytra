@@ -6,6 +6,7 @@ Exposes endpoints for the Ops Console UI and monitoring agents:
 - /ops/trigger-ingest: Manually trigger market tick ingestion
 - /ops/news: Latest Marketaux news feed
 """
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from app.ops.health_checker import get_system_metrics
 from app.models.candle_predictor import predictor
@@ -23,11 +24,13 @@ async def ops_health():
 
 
 @ops_router.get("/news")
-async def ops_news():
-    """Returns cached news articles from Marketaux."""
+async def ops_news(symbol: Optional[str] = None):
+    """Returns news articles for the selected stock or general Indian market news."""
+    articles = market_worker.get_news_for_symbol(symbol)
     return {
-        "count": len(market_worker.latest_news),
-        "articles": market_worker.latest_news,
+        "symbol": symbol.upper() if symbol else "MARKET",
+        "count": len(articles),
+        "articles": articles,
     }
 
 

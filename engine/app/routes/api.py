@@ -132,8 +132,25 @@ async def get_insight(symbol: str, response: Response):
         raise HTTPException(status_code=404, detail=f"Ticker '{symbol}' not found in BSE Sensex 30")
 
     response.headers["Cache-Control"] = "public, max-age=180, stale-while-revalidate=300"
-    insight = await market_reasoner.generate_insight(sym, news_items=market_worker.latest_news)
+    stock_news = market_worker.get_news_for_symbol(sym)
+    insight = await market_reasoner.generate_insight(sym, news_items=stock_news)
     return insight
+
+
+@router.get("/news/{symbol}")
+async def get_stock_news(symbol: str, response: Response):
+    """Returns curated and live news articles specifically for the requested stock."""
+    sym = symbol.upper()
+    if sym not in SENSEX_DICT:
+        raise HTTPException(status_code=404, detail=f"Ticker '{symbol}' not found in BSE Sensex 30")
+
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    articles = market_worker.get_news_for_symbol(sym)
+    return {
+        "symbol": sym,
+        "count": len(articles),
+        "articles": articles,
+    }
 
 
 @router.get("/quote/{symbol}")

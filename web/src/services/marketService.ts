@@ -56,6 +56,25 @@ export interface ChartResponse {
   candles: CandleData[];
 }
 
+export interface StockNewsArticle {
+  uuid: string;
+  symbol: string;
+  title: string;
+  summary: string;
+  description: string;
+  url: string;
+  source: string;
+  published_at: string;
+  sentiment_score: number;
+  entities: string[];
+}
+
+export interface StockNewsResponse {
+  symbol: string;
+  count: number;
+  articles: StockNewsArticle[];
+}
+
 export interface MarketInsight {
   symbol: string;
   company_name: string;
@@ -162,6 +181,38 @@ export async function fetchMarketTickers(): Promise<MarketTicker[]> {
   }
 
   // No cache at all, await fetch
+  return await fetchPromise;
+}
+
+/**
+ * Fetches stock-specific news articles with client SWR caching.
+ */
+export async function fetchStockNews(symbol: string): Promise<StockNewsArticle[]> {
+  const cacheKey = `news_${symbol.toUpperCase()}`;
+  const { data, isStale } = getFromCache<StockNewsArticle[]>(cacheKey, 120);
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/market/news/${symbol.toUpperCase()}`);
+      if (res.ok) {
+        const json = (await res.json()) as StockNewsResponse;
+        const articles = json.articles || [];
+        saveToCache(cacheKey, articles);
+        return articles;
+      }
+    } catch {
+      // Network failure
+    }
+    return data || [];
+  })();
+
+  if (data && !isStale) {
+    return data;
+  }
+  if (data) {
+    fetchPromise.catch(() => null);
+    return data;
+  }
   return await fetchPromise;
 }
 

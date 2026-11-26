@@ -5,18 +5,54 @@ import { Card3D } from '../../design/Card3D';
 import {
   fetchStockChart,
   fetchStockInsight,
+  fetchStockNews,
   ChartResponse,
   CandleData,
   MarketInsight,
+  StockNewsArticle,
 } from '../../services/marketService';
 import {
   Sparkles,
   ArrowUpRight,
   ArrowDownRight,
   CheckCircle2,
+  Newspaper,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getFirestoreWallet, recordTransactionInLedger } from '../../services/firestoreService';
+
+function getSafeExternalUrl(rawUrl?: string): string | null {
+  if (!rawUrl) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+  } catch {
+    // Invalid URL
+  }
+  return null;
+}
+
+function getSentimentMeta(score?: number): { label: string; badgeClass: string } {
+  if (typeof score === 'number' && score >= 0.2) {
+    return {
+      label: 'Positive',
+      badgeClass: 'bg-emerald-950/60 text-emerald-300 border-emerald-800/50',
+    };
+  }
+  if (typeof score === 'number' && score <= -0.15) {
+    return {
+      label: 'Caution',
+      badgeClass: 'bg-rose-950/60 text-rose-300 border-rose-800/50',
+    };
+  }
+  return {
+    label: 'Neutral',
+    badgeClass: 'bg-surface-inset text-text-tertiary border-surface-border',
+  };
+}
 
 interface StockChartModalProps {
   symbol: string;
@@ -35,6 +71,9 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
   const [timeline, setTimeline] = useState<'1D' | '1W' | '1M' | '1Y' | '5Y'>('1D');
   const [chartData, setChartData] = useState<ChartResponse | null>(null);
   const [insight, setInsight] = useState<MarketInsight | null>(null);
+  const [news, setNews] = useState<StockNewsArticle[]>([]);
+  const [newsLoading, setNewsLoading] = useState<boolean>(true);
+  const [selectedArticle, setSelectedArticle] = useState<StockNewsArticle | null>(null);
   const [, setLoading] = useState<boolean>(true);
   const [showForecast, setShowForecast] = useState<boolean>(true);
 
@@ -51,26 +90,37 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
 
   useEffect(() => {
     if (!isOpen || !symbol) return;
+    let cancelled = false;
     setLoading(true);
+    setNewsLoading(true);
+    setSelectedArticle(null);
     setOrderSuccessMsg(null);
 
     // Fetch user wallet
     if (user?.uid) {
       getFirestoreWallet(user.uid).then((w) => {
-        if (w) setWalletBalancePaise(w.total_cash_paise);
+        if (!cancelled && w) setWalletBalancePaise(w.total_cash_paise);
       });
     }
 
-    // Load Chart & Insights in parallel
+    // Load Chart, Insights & Stock-Specific News in parallel
     const allowForecast = timeline === '1D' && showForecast;
     Promise.all([
       fetchStockChart(symbol, '5m', allowForecast, timeline),
       fetchStockInsight(symbol),
-    ]).then(([chart, ins]) => {
+      fetchStockNews(symbol),
+    ]).then(([chart, ins, stockNews]) => {
+      if (cancelled) return;
       setChartData(chart);
       setInsight(ins);
+      setNews(stockNews || []);
+      setNewsLoading(false);
       setLoading(false);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, symbol, timeline, showForecast, user?.uid]);
 
   // Continuous animation loop for glowing purple forecast candles
@@ -426,6 +476,103 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
           </Card3D>
         )}
 
+        {/* Stock-Specific Financial News Feed */}
+        <section aria-labelledby="stock-news-heading" className="bg-surface-inset p-4 rounded-xl border border-surface-border space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Newspaper className="w-4 h-4 text-purple-400" aria-hidden="true" />
+              <h3
+                id="stock-news-heading"
+                className="text-xs font-bold uppercase tracking-wider text-text-primary"
+              >
+                {symbol} Market News
+              </h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/50 font-semibold">
+                Today
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-text-tertiary">
+              {news.length} {news.length === 1 ? 'item' : 'items'}
+            </span>
+          </div>
+
+          {newsLoading && news.length === 0 ? (
+            <p className="text-xs text-text-tertiary py-2">
+              Loading latest coverage for {symbol}...
+            </p>
+          ) : news.length === 0 ? (
+            <p className="text-xs text-text-tertiary py-2">
+              No recent articles available for {symbol} today.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {news.map((item) => {
+                const safeUrl = getSafeExternalUrl(item.url);
+                const sentiment = getSentimentMeta(item.sentiment_score);
+                const publishedTime = item.published_at
+                  ? new Date(item.published_at).toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : '';
+
+                return (
+                  <article
+                    key={item.uuid}
+                    className="rounded-xl bg-surface-raised border border-surface-border p-3 space-y-1.5 hover:border-purple-500/40 transition-colors"
+                  >
+                    <header className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-purple-400">{item.source}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${sentiment.badgeClass}`}
+                        >
+                          {sentiment.label}
+                        </span>
+                      </div>
+                      {publishedTime && (
+                        <time dateTime={item.published_at} className="font-mono text-text-tertiary">
+                          {publishedTime} IST
+                        </time>
+                      )}
+                    </header>
+
+                    <h4 className="text-xs font-bold text-text-primary leading-snug">
+                      {item.title}
+                    </h4>
+
+                    <p className="text-[11px] text-text-secondary leading-relaxed line-clamp-2">
+                      {item.summary || item.description}
+                    </p>
+
+                    <footer className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArticle(item)}
+                        className="text-[11px] font-semibold text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
+                      >
+                        Quick Summary →
+                      </button>
+
+                      {safeUrl && (
+                        <a
+                          href={safeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-text-secondary hover:text-text-primary transition-colors"
+                        >
+                          <span>Read on {item.source}</span>
+                          <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </footer>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
         {/* Paper Trade Execution Ticket */}
         <div className="bg-surface-inset p-4 rounded-xl border border-surface-border space-y-3">
           <div className="flex items-center justify-between">
@@ -499,6 +646,73 @@ export const StockChartModal: React.FC<StockChartModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Article Detail Summary Modal */}
+      {selectedArticle && (
+        <Dialog
+          open={!!selectedArticle}
+          onOpenChange={(open) => !open && setSelectedArticle(null)}
+          title={selectedArticle.title}
+          description={`${selectedArticle.source}${
+            selectedArticle.published_at
+              ? ` • ${new Date(selectedArticle.published_at).toLocaleString('en-IN')}`
+              : ''
+          }`}
+          className="max-w-lg"
+        >
+          <div className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-surface-inset border border-surface-border space-y-2">
+              <p className="text-xs text-text-primary leading-relaxed">
+                {selectedArticle.summary}
+              </p>
+              {selectedArticle.description &&
+                selectedArticle.description !== selectedArticle.summary && (
+                  <p className="text-xs text-text-secondary leading-relaxed pt-2 border-t border-surface-border">
+                    {selectedArticle.description}
+                  </p>
+                )}
+            </div>
+
+            {selectedArticle.entities && selectedArticle.entities.length > 0 && (
+              <ul aria-label="Related entities" className="flex flex-wrap gap-1.5">
+                {selectedArticle.entities.map((entity) => (
+                  <li
+                    key={entity}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-950/50 text-purple-300 border border-purple-800/40"
+                  >
+                    {entity}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-surface-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectedArticle(null)}
+              >
+                Close
+              </Button>
+              {(() => {
+                const safeUrl = getSafeExternalUrl(selectedArticle.url);
+                return safeUrl ? (
+                  <a
+                    href={safeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-900/60 text-purple-200 border border-purple-700/50 hover:bg-purple-800/70 transition-colors"
+                  >
+                    <span>Visit Original Source</span>
+                    <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                  </a>
+                ) : null;
+              })()}
+            </div>
+          </div>
+        </Dialog>
+      )}
     </Dialog>
   );
 };

@@ -7,6 +7,7 @@ Features synthetic tick simulation during off-market hours so live testing never
 import asyncio
 import logging
 import random
+import re
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Any
@@ -52,6 +53,7 @@ class MarketIngestionWorker:
     def __init__(self):
         self._running = False
         self._latest_news: List[dict] = []
+        self._has_live_marketaux_news: bool = False
         self._symbol_sentiment: Dict[str, float] = {}
         self._latest_quotes: Dict[str, dict] = {}
 
@@ -66,6 +68,47 @@ class MarketIngestionWorker:
     @property
     def latest_quotes(self) -> Dict[str, dict]:
         return self._latest_quotes
+
+    def get_news_for_symbol(self, symbol: Optional[str] = None) -> List[dict]:
+        """
+        Returns financial news articles specifically for the selected stock, or general market news.
+        Prioritizes live Marketaux feed if matching articles exist, with rich curated stock news fallback.
+        """
+        if not symbol or symbol.upper() in ["ALL", "MARKET"]:
+            return self._latest_news if self._latest_news else self._get_curated_indian_news()
+
+        sym = symbol.upper()
+        ticker = SENSEX_DICT.get(sym)
+        sym_pattern = re.compile(r"\b" + re.escape(sym) + r"\b", re.IGNORECASE)
+        # Match multi-word distinctive name so shared group names (Tata/Adani/Bajaj) never collide
+        company_phrase = ""
+        if ticker:
+            clean_name = re.sub(r"\b(Ltd\.?|Limited|India|of)\b", "", ticker.name, flags=re.IGNORECASE).strip()
+            parts = clean_name.split()
+            if len(parts) >= 2:
+                company_phrase = f"{parts[0]} {parts[1]}".lower()
+            elif parts:
+                company_phrase = parts[0].lower()
+
+        # 1. Only filter live Marketaux articles (never cross-match offline curated market-wide articles)
+        if self._has_live_marketaux_news and self._latest_news:
+            matching = []
+            for n in self._latest_news:
+                haystack = f"{n.get('title', '')} {n.get('summary', '')}"
+                entities_text = " ".join(str(e) for e in n.get("entities", []))
+                is_match = (
+                    bool(sym_pattern.search(haystack))
+                    or bool(sym_pattern.search(entities_text))
+                    or (bool(company_phrase) and company_phrase in (haystack + " " + entities_text).lower())
+                )
+                if is_match:
+                    matching.append(n)
+            if len(matching) >= 2:
+                return matching
+
+        # 2. Return curated stock-specific news for the selected stock
+        from app.ingestion.stock_news_data import get_curated_stock_news
+        return get_curated_stock_news(sym)
 
     async def fetch_twelve_data_quote(self, symbol: str) -> Optional[dict]:
         """Fetches quote for a BSE symbol from Twelve Data only during market hours."""
@@ -208,6 +251,7 @@ class MarketIngestionWorker:
                             })
 
                         self._latest_news = news_items
+                        self._has_live_marketaux_news = True
                         await cache.set_json("marketaux:news", news_items, ttl_sec=600)
                         logger.info("Successfully fetched %d articles from Marketaux", len(news_items))
                         return news_items
@@ -223,6 +267,7 @@ class MarketIngestionWorker:
         # Fallback to rich curated Indian news of the day
         curated = self._get_curated_indian_news()
         self._latest_news = curated
+        self._has_live_marketaux_news = False
         await cache.set_json("marketaux:news", curated, ttl_sec=600)
         logger.info("Loaded %d curated Indian financial news articles", len(curated))
         return curated

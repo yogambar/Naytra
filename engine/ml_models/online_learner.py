@@ -90,8 +90,15 @@ class OnlineLearner:
         if len(historical_candles) < 8:
             return
 
-        # Feature matrix of historical sequence
-        feats = FeatureExtractor.extract(historical_candles[-15:], sentiment=sentiment)
+        # Feature matrix of historical sequence normalized to fixed seq_len=15
+        raw_feats = FeatureExtractor.extract(historical_candles[-15:], sentiment=sentiment)
+        seq_len = 15
+        if raw_feats.shape[0] < seq_len:
+            pad_rows = seq_len - raw_feats.shape[0]
+            pad = np.repeat(raw_feats[:1], pad_rows, axis=0)
+            feats = np.vstack([pad, raw_feats])
+        else:
+            feats = raw_feats[-seq_len:]
         last_price = historical_candles[-1].close
         new_price = new_actual_candle.close
 
