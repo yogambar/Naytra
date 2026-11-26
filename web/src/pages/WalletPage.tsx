@@ -295,9 +295,9 @@ export const WalletPage: React.FC = () => {
           data-testid="wallet-balance-card"
           elevation="e2"
           interactive={false}
-          className="h-full overflow-hidden border border-surface-border flex flex-col justify-between"
+          className="h-full lg:min-h-[420px] overflow-hidden border border-surface-border flex flex-col justify-between"
         >
-          <div className="p-6 flex-1 flex flex-col items-center justify-center text-center space-y-2">
+          <div className="px-6 py-12 flex-1 flex flex-col items-center justify-center text-center space-y-2.5">
             <span className="text-xs font-bold uppercase tracking-wider text-text-tertiary block">
               Available Balance
             </span>
@@ -311,12 +311,12 @@ export const WalletPage: React.FC = () => {
           </div>
 
           <div className="border-t border-surface-border divide-y divide-surface-border text-sm">
-            <div className="px-5 py-3 flex items-center justify-between">
+            <div className="px-6 py-4 flex items-center justify-between">
               <span className="text-text-secondary">Cash</span>
               <span className="font-mono font-bold text-text-primary">{formatINR(cashInr)}</span>
             </div>
 
-            <div className="px-5 py-3 flex items-center justify-between">
+            <div className="px-6 py-4 flex items-center justify-between">
               <div>
                 <span className="text-text-secondary">Holdings</span>
                 <Link
@@ -331,7 +331,7 @@ export const WalletPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="px-5 py-3.5 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-surface-inset/30">
+            <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-surface-inset/30">
               <div title="Funds reserved for pending orders or withdrawals (₹0 when orders execute immediately)">
                 <span className="text-[11px] text-text-tertiary uppercase block">Locked</span>
                 <span className="text-sm font-bold font-mono text-text-primary">
@@ -368,7 +368,7 @@ export const WalletPage: React.FC = () => {
           data-testid="wallet-action-card"
           elevation="e2"
           interactive={false}
-          className="h-full overflow-hidden border border-surface-border bg-surface-raised flex flex-col"
+          className="h-full lg:min-h-[420px] overflow-hidden border border-surface-border bg-surface-raised flex flex-col"
         >
           <RadixTabs.Root
             className="h-full flex flex-col"
@@ -405,9 +405,9 @@ export const WalletPage: React.FC = () => {
               <form
                 onSubmit={handleDepositSubmit}
                 noValidate
-                className="p-5 flex-1 flex flex-col justify-between gap-5"
+                className="p-6 flex-1 flex flex-col justify-between gap-6"
               >
-                <div className="text-center space-y-2 pt-1">
+                <div className="text-center space-y-3 py-4">
                   <label
                     htmlFor={depositInputId}
                     className="block text-xs font-semibold text-text-tertiary"
@@ -498,9 +498,9 @@ export const WalletPage: React.FC = () => {
               <form
                 onSubmit={handleWithdrawSubmit}
                 noValidate
-                className="p-5 flex-1 flex flex-col justify-between gap-5"
+                className="p-6 flex-1 flex flex-col justify-between gap-6"
               >
-                <div className="text-center space-y-2 pt-1">
+                <div className="text-center space-y-3 py-4">
                   <label
                     htmlFor={withdrawInputId}
                     className="block text-xs font-semibold text-text-tertiary"
